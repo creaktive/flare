@@ -1,11 +1,13 @@
-CC=gcc
+# CC=gcc
+CC=clang
 RM=rm -f
 CFLAGS=-Wall -Oz
-#DEFS=
-#LDFLAGS=-static
+# CFLAGS=-Wall -g -pg
+# DEFS=
+# LDFLAGS=-static
 
 # Uncomment under Win32 (CYGWIN/MinGW):
-#EXE=.exe
+# EXE=.exe
 
 NRF905_DEMOD=nrf905_demod$(EXE)
 COBJ=nrf905_demod.o lib_crc.o
