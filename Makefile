@@ -1,7 +1,7 @@
-# CC=gcc
-CC=clang
+CC=gcc
+# CC=clang
 RM=rm -f
-CFLAGS=-Wall -Oz
+CFLAGS=-Wall -O3
 # CFLAGS=-Wall -g -pg
 # DEFS=
 # LDFLAGS=-static
