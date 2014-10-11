@@ -92,7 +92,7 @@ void process_stream(FILE *stream) {
                             crc16 = update_crc_ccitt(crc16, msg[msg_len]);
                             if (crc16 == 0) {
                                 gettimeofday(&tv, NULL);
-                                printf("%10ld.%06d\t", tv.tv_sec, tv.tv_usec);
+                                printf("%10ld.%06d\t", tv.tv_sec, (int) tv.tv_usec);
 
                                 for (k = 0; k <= msg_len; k++)
                                     printf("%02x", msg[k]);
