@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include "lib_crc.h"
 
@@ -44,6 +45,8 @@ void process_sample(int16_t A) {
     uint8_t m1, m2;
     uint16_t crc16;
 
+    struct timeval tv;
+
     buffer[buffer_end++] = A;
     buffer_end &= BUFFER_SIZE - 1;
 
@@ -78,6 +81,9 @@ void process_sample(int16_t A) {
                 if ((j & 7) == 7) {
                     crc16 = update_crc_ccitt(crc16, msg[msg_len]);
                     if (crc16 == 0) {
+                        gettimeofday(&tv, NULL);
+                        printf("%10ld.%06d\t", tv.tv_sec, tv.tv_usec);
+
                         for (k = 0; k <= msg_len; k++)
                             printf("%02x", msg[k]);
                         printf("\n");
