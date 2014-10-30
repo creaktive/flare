@@ -16,7 +16,11 @@
 *.exe
 *.out
 *.app
+flarm_decode
 nrf905_demod
 
 # Data files
 *.dat
+
+# U MAD?
+flarm_codec.h
