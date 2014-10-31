@@ -4,7 +4,7 @@ RM=rm -f
 CFLAGS=-Wall -Ofast
 # CFLAGS=-Wall -g -pg
 # DEFS=
-# LDFLAGS=-static
+LDFLAGS=-lm
 
 # Uncomment under Win32 (CYGWIN/MinGW):
 # EXE=.exe

@@ -56,7 +56,7 @@ char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double tim
 
     #define json_concat(...)                        \
         snprintf(tmp, sizeof(tmp), ##__VA_ARGS__);  \
-        strlcat(out, tmp, sizeof(out));
+        strncat(out, tmp, sizeof(out) - sizeof(tmp) - 1);
 
     json_concat("{\"addr\":\"%X\",", pkt->addr);
     if (timestamp > 1.4e9) {
