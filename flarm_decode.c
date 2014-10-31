@@ -101,8 +101,8 @@ int main(int argc, char **argv) {
         i = 0;
         crc16 = 0xffff;
         for (p = line, q = p + strlen(line) - 1; p < q; p++) {
-            if (ishexnumber(*p)
-                && ishexnumber(*(p + 1))
+            if (isxdigit(*p)
+                && isxdigit(*(p + 1))
                 && sscanf(p, "%2hhx", &buf[i]) == 1
             ) {
                 p++;
