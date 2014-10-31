@@ -1,8 +1,8 @@
-# nRF905 demodulator
+# nRF905 demodulator/FLARM decoder
 
 ```bash
 make
-rtl_fm -f 868.3m -s 1.6m -g 49.6 -p 49 - | ./nrf905_demod
+rtl_fm -f 868.3m -s 1.6m -g 49.6 -p 49 - | ./nrf905_demod | ./flarm_decode 43.21 5.43
 ```
 
 # References
