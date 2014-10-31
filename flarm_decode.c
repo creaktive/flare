@@ -36,7 +36,7 @@ double haversine (double lat1, double lon1, double lat2, double lon2) {
     return d;
 }
 
-char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double timestamp) {
+char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double timestamp, double rssi) {
     xtea_decrypt(6, (uint32_t *) pkt + 1, key1);
     xtea_decrypt(6, (uint32_t *) pkt + 3, key2);
 
@@ -60,11 +60,14 @@ char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double tim
 
     json_concat("{\"addr\":\"%X\",", pkt->addr);
     if (timestamp > 1.4e9) {
-        json_concat("\"time\":%f,", timestamp);
+        json_concat("\"time\":%.06f,", timestamp);
     }
-    json_concat("\"lat\":%f,", lat / 1e7);
-    json_concat("\"lon\":%f,", lon / 1e7);
-    json_concat("\"dist\":%f,", haversine(ref_lat, ref_lon, lat / 1e7, lon / 1e7) * KILOMETER_RHO);
+    if (rssi > 0.1) {
+        json_concat("\"rssi\":%.01f,", rssi);
+    }
+    json_concat("\"lat\":%.07f,", lat / 1e7);
+    json_concat("\"lon\":%.07f,", lon / 1e7);
+    json_concat("\"dist\":%.02f,", haversine(ref_lat, ref_lon, lat / 1e7, lon / 1e7) * KILOMETER_RHO * 1000);
     json_concat("\"alt\":%d,", pkt->alt);
     json_concat("\"vs\":%d,", vs);
     json_concat("\"stealth\":%d,", pkt->stealth);
@@ -76,7 +79,7 @@ char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double tim
 }
 
 int main(int argc, char **argv) {
-    double ref_lat, ref_lon, timestamp;
+    double ref_lat, ref_lon, timestamp, rssi;
     char *line = NULL;
     char *p, *q;
     uint8_t buf[29];
@@ -93,7 +96,7 @@ int main(int argc, char **argv) {
     }
 
     while (getline(&line, &len, stdin) != -1) {
-        sscanf(line, "%lf", &timestamp);
+        sscanf(line, "%lf %lf", &timestamp, &rssi);
 
         i = 0;
         crc16 = 0xffff;
@@ -113,7 +116,7 @@ int main(int argc, char **argv) {
         }
 
         if (crc16 == 0)
-            puts(flarm_decode((flarm_packet *) (buf + 3), ref_lat, ref_lon, timestamp));
+            puts(flarm_decode((flarm_packet *) (buf + 3), ref_lat, ref_lon, timestamp, rssi));
         else
             fprintf(stderr, "record with bad CRC\n");
     }

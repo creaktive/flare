@@ -1,4 +1,5 @@
 #include <limits.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,8 +10,8 @@
 #define SAMPLE_RATE     (16)
 #define PREAMBLE_BITS   (10)
 #define PREAMBLE_SIZE   (2 * SAMPLE_RATE * PREAMBLE_BITS)
-#define MAX_MSG_SIZE    (32)
-#define BUFFER_SIZE     (1 << 14) /* must be power of 2, and larger than the expected message */
+#define MAX_MSG_SIZE    (29)
+#define BUFFER_SIZE     (1 << 13) /* must be power of 2, and larger than the expected message */
 
 /*
  * nRF905 preamble is Manchester-encoded 0x3F6 (0xAAA66):
@@ -40,6 +41,7 @@ void process_stream(FILE *stream) {
     uint8_t m1, m2;
     uint16_t crc16;
 
+    double timestamp, rms;
     struct timeval tv;
 
     while (!feof(stream)) {
@@ -92,7 +94,14 @@ void process_stream(FILE *stream) {
                             crc16 = update_crc_ccitt(crc16, msg[msg_len]);
                             if (crc16 == 0) {
                                 gettimeofday(&tv, NULL);
-                                printf("%10ld.%06d\t", tv.tv_sec, (int) tv.tv_usec);
+                                timestamp = tv.tv_sec + tv.tv_usec / 1e6;
+                                timestamp -= (BUFFER_SIZE / SAMPLE_RATE) * 2e-5;
+                                printf("%.06f\t", timestamp);
+
+                                for (k = 0, rms = 0; k < i; k++)
+                                    rms += BUF(k) * BUF(k);
+                                rms /= i;
+                                printf("%.01f\t", 20.0 * log10(SHRT_MAX / sqrt(rms)));
 
                                 for (k = 0; k <= msg_len; k++)
                                     printf("%02x", msg[k]);
