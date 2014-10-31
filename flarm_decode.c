@@ -62,7 +62,7 @@ char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double tim
     if (timestamp > 1.4e9) {
         json_concat("\"time\":%.06f,", timestamp);
     }
-    if (rssi > 0.1) {
+    if (fabs(rssi) > 0.01) {
         json_concat("\"rssi\":%.01f,", rssi);
     }
     json_concat("\"lat\":%.07f,", lat / 1e7);

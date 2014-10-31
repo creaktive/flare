@@ -101,7 +101,7 @@ void process_stream(FILE *stream) {
                                 for (k = 0, rms = 0; k < i; k++)
                                     rms += BUF(k) * BUF(k);
                                 rms /= i;
-                                printf("%.01f\t", 20.0 * log10(SHRT_MAX / sqrt(rms)));
+                                printf("%.01f\t", 20.0 * log10(sqrt(rms) / SHRT_MAX));
 
                                 for (k = 0; k <= msg_len; k++)
                                     printf("%02x", msg[k]);
