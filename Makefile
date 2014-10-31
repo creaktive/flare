@@ -12,7 +12,7 @@ CFLAGS=-Wall -Ofast
 NRF905_DEMOD=nrf905_demod$(EXE)
 FLARM_DECODE=flarm_decode$(EXE)
 
-all: $(NRF905_DEMOD)
+all: $(NRF905_DEMOD) $(FLARM_DECODE)
 
 $(NRF905_DEMOD): nrf905_demod.o lib_crc.o
 	$(CC) ${LDFLAGS} -o $(NRF905_DEMOD) nrf905_demod.o lib_crc.o

@@ -44,6 +44,8 @@ void process_stream(FILE *stream) {
     double timestamp, rms;
     struct timeval tv;
 
+    char out[128], *p;
+
     while (!feof(stream)) {
         len = fread(readbuf, sizeof(int16_t), BUFFER_SIZE, stream);
 
@@ -96,16 +98,20 @@ void process_stream(FILE *stream) {
                                 gettimeofday(&tv, NULL);
                                 timestamp = tv.tv_sec + tv.tv_usec / 1e6;
                                 timestamp -= (BUFFER_SIZE / SAMPLE_RATE) * 2e-5;
-                                printf("%.06f\t", timestamp);
 
                                 for (k = 0, rms = 0; k < i; k++)
                                     rms += BUF(k) * BUF(k);
                                 rms /= i;
-                                printf("%.01f\t", 20.0 * log10(sqrt(rms) / SHRT_MAX));
 
-                                for (k = 0; k <= msg_len; k++)
-                                    printf("%02x", msg[k]);
-                                printf("\n");
+                                snprintf(out, sizeof(out),
+                                        "%.06f\t%.01f\t",
+                                        timestamp,
+                                        20.0 * log10(sqrt(rms) / SHRT_MAX)
+                                );
+                                for (k = 0, p = out + strlen(out); k <= msg_len; k++, p += 2)
+                                    snprintf(p, 3, "%02x", msg[k]);
+                                puts(out);
+                                fflush(stdout);
 
                                 buffer_skip = PREAMBLE_SIZE + 2 * SAMPLE_RATE * (msg_len + 1) * CHAR_BIT;
                                 break;

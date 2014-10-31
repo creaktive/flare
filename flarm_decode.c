@@ -115,9 +115,10 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (crc16 == 0)
+        if (crc16 == 0) {
             puts(flarm_decode((flarm_packet *) (buf + 3), ref_lat, ref_lon, timestamp, rssi));
-        else
+            fflush(stdout);
+        } else
             fprintf(stderr, "record with bad CRC\n");
     }
 
