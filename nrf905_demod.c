@@ -95,6 +95,11 @@ void process_stream(FILE *stream) {
                         if ((j & (CHAR_BIT - 1)) == (CHAR_BIT - 1)) {
                             crc16 = update_crc_ccitt(crc16, msg[msg_len]);
                             if (crc16 == 0) {
+                                msg_len++;
+
+                                for (k = 0, p = out; k < msg_len; k++, p += 2)
+                                    snprintf(p, 3, "%02x", msg[k]);
+
                                 gettimeofday(&tv, NULL);
                                 timestamp = tv.tv_sec + tv.tv_usec / 1e6;
                                 timestamp -= (BUFFER_SIZE / SAMPLE_RATE) * 2e-5;
@@ -103,17 +108,16 @@ void process_stream(FILE *stream) {
                                     rms += BUF(k) * BUF(k);
                                 rms /= i;
 
-                                snprintf(out, sizeof(out),
-                                        "%.06f\t%.01f\t",
+                                snprintf(out + msg_len * 2, sizeof(out) + msg_len * 2,
+                                        "\t%.06f\t%.01f",
                                         timestamp,
                                         20.0 * log10(sqrt(rms) / SHRT_MAX)
                                 );
-                                for (k = 0, p = out + strlen(out); k <= msg_len; k++, p += 2)
-                                    snprintf(p, 3, "%02x", msg[k]);
+
                                 puts(out);
                                 fflush(stdout);
 
-                                buffer_skip = PREAMBLE_SIZE + 2 * SAMPLE_RATE * (msg_len + 1) * CHAR_BIT;
+                                buffer_skip = PREAMBLE_SIZE + 2 * SAMPLE_RATE * msg_len * CHAR_BIT;
                                 break;
                             }
                         }

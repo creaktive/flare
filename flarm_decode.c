@@ -96,8 +96,6 @@ int main(int argc, char **argv) {
     }
 
     while (getline(&line, &len, stdin) != -1) {
-        sscanf(line, "%lf %lf", &timestamp, &rssi);
-
         i = 0;
         crc16 = 0xffff;
         for (p = line, q = p + strlen(line) - 1; p < q; p++) {
@@ -116,7 +114,18 @@ int main(int argc, char **argv) {
         }
 
         if (crc16 == 0) {
-            puts(flarm_decode((flarm_packet *) (buf + 3), ref_lat, ref_lon, timestamp, rssi));
+            timestamp = rssi = 0;
+            if (p++ < q)
+                sscanf(p, "%lf %lf", &timestamp, &rssi);
+
+            q = flarm_decode(
+                (flarm_packet *) (buf + 3),
+                ref_lat, ref_lon,
+                timestamp,
+                rssi
+            );
+
+            puts(q);
             fflush(stdout);
         } else
             fprintf(stderr, "record with bad CRC\n");
