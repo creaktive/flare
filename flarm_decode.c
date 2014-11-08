@@ -36,7 +36,7 @@ double haversine (double lat1, double lon1, double lat2, double lon2) {
     return d;
 }
 
-char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double timestamp, double rssi) {
+char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, int16_t ref_alt, double timestamp, double rssi) {
     xtea_decrypt(6, (uint32_t *) pkt + 1, key1);
     xtea_decrypt(6, (uint32_t *) pkt + 3, key2);
 
@@ -68,7 +68,7 @@ char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double tim
     json_concat("\"lat\":%.07f,", lat / 1e7);
     json_concat("\"lon\":%.07f,", lon / 1e7);
     json_concat("\"dist\":%.02f,", haversine(ref_lat, ref_lon, lat / 1e7, lon / 1e7) * KILOMETER_RHO * 1000);
-    json_concat("\"alt\":%d,", pkt->alt);
+    json_concat("\"alt\":%d,", pkt->alt - ref_alt);
     json_concat("\"vs\":%d,", vs);
     json_concat("\"stealth\":%d,", pkt->stealth);
     json_concat("\"type\":%d,", pkt->type);
@@ -80,6 +80,7 @@ char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, double tim
 
 int main(int argc, char **argv) {
     double ref_lat, ref_lon, timestamp, rssi;
+    int16_t ref_alt = 0;
     char *line = NULL;
     char *p, *q;
     uint8_t buf[29];
@@ -87,11 +88,13 @@ int main(int argc, char **argv) {
     uint16_t i;
     uint16_t crc16;
 
-    if (argc == 3) {
+    if (argc >= 3 && argc <= 4) {
         ref_lat = atof(argv[1]);
         ref_lon = atof(argv[2]);
+        if (argc == 4)
+            ref_alt = atoi(argv[3]);
     } else {
-        fprintf(stderr, "usage: %s LAT LON\n", argv[0]);
+        fprintf(stderr, "usage: %s LAT LON [GEOID_ALT]\n", argv[0]);
         return 1;
     }
 
@@ -120,7 +123,7 @@ int main(int argc, char **argv) {
 
             q = flarm_decode(
                 (flarm_packet *) (buf + 3),
-                ref_lat, ref_lon,
+                ref_lat, ref_lon, ref_alt,
                 timestamp,
                 rssi
             );
