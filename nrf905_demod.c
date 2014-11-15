@@ -154,14 +154,16 @@ void process_stream(FILE *stream) {
                                 timestamp = tv.tv_sec + tv.tv_usec / 1e6;
                                 timestamp -= (BUFFER_SIZE / SAMPLE_RATE) * 2e-5;
 
-                                for (k = 0, rms = 0; k < i; k++)
-                                    rms += m_buff[k] * m_buff[k];
+                                for (k = 0, rms = 0; k < i; k++) {
+                                    m = sqrt(m_buff[(buffer_end + k) & (BUFFER_SIZE - 1)]);
+                                    rms += m * m;
+                                }
                                 rms /= i;
 
                                 snprintf(out + msg_len * 2, sizeof(out) + msg_len * 2,
                                         "\t%.06f\t%.01f",
                                         timestamp,
-                                        20.0 * log10(SHRT_MAX / sqrt(rms))
+                                        20.0 * log10(sqrt(SHRT_MAX) / sqrt(rms))
                                 );
 
                                 puts(out);
