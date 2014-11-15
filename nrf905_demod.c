@@ -163,7 +163,7 @@ void process_stream(FILE *stream) {
                                 snprintf(out + msg_len * 2, sizeof(out) + msg_len * 2,
                                         "\t%.06f\t%.01f",
                                         timestamp,
-                                        20.0 * log10(sqrt(SHRT_MAX) / sqrt(rms))
+                                        20.0 * log10(sqrt(rms) / 181.019336)
                                 );
 
                                 puts(out);
