@@ -22,52 +22,46 @@ const uint8_t hi_map[PREAMBLE_BITS] = { 1, 3, 5, 7, 9, 11, 12, 15, 16, 19 };
 const uint8_t lo_map[PREAMBLE_BITS] = { 0, 2, 4, 6, 8, 10, 13, 14, 17, 18 };
 
 /* Digital filter designed by mkfilter/mkshape/gencode   A.J. Fisher
- *    Command line: /www/usr/fisher/helpers/mkfilter -Bu -Lp -o 6 -a 1.1718750000e-01 0.0000000000e+00 -l */
+   Command line: /www/usr/fisher/helpers/mkfilter -Bu -Lp -o 4 -a 1.0937500000e-01 0.0000000000e+00 -l */
 __attribute__((always_inline)) double lowpass_i(double v) {
-    static double xv[7], yv[7];
+    static double xv[5], yv[5];
 
-    xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4]; xv[4] = xv[5]; xv[5] = xv[6];
-    xv[6] = v / 1.313502153e+03;
-    yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4]; yv[4] = yv[5]; yv[5] = yv[6];
-    yv[6] = (xv[0] + xv[6]) + 6 * (xv[1] + xv[5]) + 15 * (xv[2] + xv[4])
-        + 20 * xv[3]
-        + ( -0.0534038233 * yv[0]) + (  0.4717508964 * yv[1])
-        + ( -1.7864915891 * yv[2]) + (  3.7327266053 * yv[3])
-        + ( -4.5793923315 * yv[4]) + (  3.1660855409 * yv[5]);
+    xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4];
+    xv[4] = v / 1.530280502e+02;
+    yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4];
+    yv[4] =   (xv[0] + xv[4]) + 4 * (xv[1] + xv[3]) + 6 * xv[2]
+        + ( -0.1589997056 * yv[0]) + (  0.9185354694 * yv[1])
+        + ( -2.0828312654 * yv[2]) + (  2.2187395070 * yv[3]);
 
-    return yv[6];
+    return yv[4];
 }
 
 __attribute__((always_inline)) double lowpass_q(double v) {
-    static double xv[7], yv[7];
+    static double xv[5], yv[5];
 
-    xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4]; xv[4] = xv[5]; xv[5] = xv[6];
-    xv[6] = v / 1.313502153e+03;
-    yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4]; yv[4] = yv[5]; yv[5] = yv[6];
-    yv[6] = (xv[0] + xv[6]) + 6 * (xv[1] + xv[5]) + 15 * (xv[2] + xv[4])
-        + 20 * xv[3]
-        + ( -0.0534038233 * yv[0]) + (  0.4717508964 * yv[1])
-        + ( -1.7864915891 * yv[2]) + (  3.7327266053 * yv[3])
-        + ( -4.5793923315 * yv[4]) + (  3.1660855409 * yv[5]);
+    xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4];
+    xv[4] = v / 1.530280502e+02;
+    yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4];
+    yv[4] =   (xv[0] + xv[4]) + 4 * (xv[1] + xv[3]) + 6 * xv[2]
+        + ( -0.1589997056 * yv[0]) + (  0.9185354694 * yv[1])
+        + ( -2.0828312654 * yv[2]) + (  2.2187395070 * yv[3]);
 
-    return yv[6];
+    return yv[4];
 }
 
 /* Digital filter designed by mkfilter/mkshape/gencode   A.J. Fisher
- *    Command line: /www/usr/fisher/helpers/mkfilter -Bu -Lp -o 6 -a 6.2500000000e-02 0.0000000000e+00 -l */
+   Command line: /www/usr/fisher/helpers/mkfilter -Bu -Lp -o 4 -a 6.2500000000e-02 0.0000000000e+00 -l */
 __attribute__((always_inline)) double lowpass_d(double v) {
-    static double xv[7], yv[7];
+    static double xv[5], yv[5];
 
-    xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4]; xv[4] = xv[5]; xv[5] = xv[6];
-    xv[6] = v / 3.469103409e+04;
-    yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4]; yv[4] = yv[5]; yv[5] = yv[6];
-    yv[6] = (xv[0] + xv[6]) + 6 * (xv[1] + xv[5]) + 15 * (xv[2] + xv[4])
-        + 20 * xv[3]
-        + ( -0.2165828556 * yv[0]) + (  1.6277147849 * yv[1])
-        + ( -5.1476426814 * yv[2]) + (  8.7791079706 * yv[3])
-        + ( -8.5290050840 * yv[4]) + (  4.4845630084 * yv[5]);
+    xv[0] = xv[1]; xv[1] = xv[2]; xv[2] = xv[3]; xv[3] = xv[4];
+    xv[4] = v / 1.071238871e+03;
+    yv[0] = yv[1]; yv[1] = yv[2]; yv[2] = yv[3]; yv[3] = yv[4];
+    yv[4] =   (xv[0] + xv[4]) + 4 * (xv[1] + xv[3]) + 6 * xv[2]
+        + ( -0.3555773823 * yv[0]) + (  1.7861066002 * yv[1])
+        + ( -3.4223095294 * yv[2]) + (  2.9768443337 * yv[3]);
 
-    return yv[6];
+    return yv[4];
 }
 
 void process_stream(FILE *stream) {
