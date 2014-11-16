@@ -11,7 +11,8 @@
 #define SAMPLE_RATE     (16)
 #define PREAMBLE_BITS   (10)
 #define PREAMBLE_SIZE   (2 * SAMPLE_RATE * PREAMBLE_BITS)
-#define MAX_MSG_SIZE    (29)
+#define MAX_MSG_BYTES   (29)
+#define MIN_MSG_SIZE    (2 * SAMPLE_RATE * 8 * CHAR_BIT)
 #define BUFFER_SIZE     (1 << 13) /* must be power of 2, and larger than the expected message */
 
 /*
@@ -75,11 +76,11 @@ void process_stream(FILE *stream) {
     static int16_t buffer[BUFFER_SIZE]; // demodulated signal
     static int16_t m_buff[BUFFER_SIZE]; // magnitudes only; for RSSI estimation
     static uint16_t buffer_end = 0;
-    static uint16_t buffer_skip = PREAMBLE_SIZE + 2 * SAMPLE_RATE * MAX_MSG_SIZE * CHAR_BIT;
+    static uint16_t buffer_skip = PREAMBLE_SIZE + 2 * SAMPLE_RATE * MAX_MSG_BYTES * CHAR_BIT;
     static int32_t sum = 0;
     #define BUF(i) (buffer[(buffer_end + i) & (BUFFER_SIZE - 1)])
 
-    static uint8_t msg[MAX_MSG_SIZE];
+    static uint8_t msg[MAX_MSG_BYTES];
 
     int16_t threshold;
     uint16_t i, j, k;
@@ -109,12 +110,12 @@ void process_stream(FILE *stream) {
             buffer_end &= BUFFER_SIZE - 1;
 
             sum -= BUF(BUFFER_SIZE);
-            sum += BUF(PREAMBLE_SIZE);
+            sum += BUF(PREAMBLE_SIZE + MIN_MSG_SIZE);
 
             if (buffer_skip) {
                 buffer_skip--;
             } else {
-                threshold = sum / PREAMBLE_SIZE;
+                threshold = sum / (PREAMBLE_SIZE + MIN_MSG_SIZE);
 
                 j = 0;
                 for (i = 0; i < PREAMBLE_BITS; i++) {
@@ -125,7 +126,7 @@ void process_stream(FILE *stream) {
                 }
 
                 if (j == 2 * PREAMBLE_BITS) {
-                    memset(msg, 0, MAX_MSG_SIZE);
+                    memset(msg, 0, MAX_MSG_BYTES);
                     crc16 = 0xffff;
                     for (i = PREAMBLE_SIZE, j = 0; i < BUFFER_SIZE; i += SAMPLE_RATE * 2, j++) {
                         msg_len = j >> 3;
