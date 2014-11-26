@@ -1,10 +1,10 @@
 CC=gcc
 # CC=clang
 RM=rm -f
-CFLAGS=-Wall -Ofast
-# CFLAGS=-Wall -g -pg
+CFLAGS=-Wall -Ofast -I/opt/local/include
+# CFLAGS=-Wall -g -I/opt/local/include
 # DEFS=
-LDFLAGS=-lm
+LDFLAGS=-L/opt/local/lib
 
 # Uncomment under Win32 (CYGWIN/MinGW):
 # EXE=.exe
@@ -13,14 +13,13 @@ NRF905_DEMOD=nrf905_demod$(EXE)
 FLARM_DECODE=flarm_decode$(EXE)
 
 all: $(NRF905_DEMOD) $(FLARM_DECODE)
+	# strip $(NRF905_DEMOD) $(FLARM_DECODE)
 
 $(NRF905_DEMOD): nrf905_demod.o lib_crc.o
-	$(CC) ${LDFLAGS} -o $(NRF905_DEMOD) nrf905_demod.o lib_crc.o
-	strip $(NRF905_DEMOD)
+	$(CC) ${LDFLAGS} -lfftw3 -lm -o $(NRF905_DEMOD) nrf905_demod.o lib_crc.o
 
 $(FLARM_DECODE): flarm_decode.o lib_crc.o
-	$(CC) ${LDFLAGS} -o $(FLARM_DECODE) flarm_decode.o lib_crc.o
-	strip $(FLARM_DECODE)
+	$(CC) ${LDFLAGS} -lm -o $(FLARM_DECODE) flarm_decode.o lib_crc.o
 
 lib_crc.o: lib_crc.h
 
