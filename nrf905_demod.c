@@ -7,6 +7,8 @@
 
 #include "lib_crc.h"
 
+#define forceinline __inline__ __attribute__((always_inline)) static
+
 #define symbol_samples      (16)
 #define symbol_rate         (100000)
 #define freq_mark           (150000)
@@ -15,6 +17,7 @@
 #define max_packet_bytes    (29)
 #define preamble_bits       (20)
 #define packet_samples      (symbol_samples * 2 * (preamble_bits + max_packet_bytes * 8))
+#define window_length       (symbol_samples * 2)
 #define fft_points          (symbol_samples * 2)
 #define sample_rate         (symbol_rate * symbol_samples)
 #define bin_mark            (freq_mark  / (sample_rate / fft_points))
@@ -34,7 +37,11 @@
 
 static fftw_complex *fft_inp, *fft_out;
 static fftw_plan fft_plan;
-static double window_function[fft_points];
+static double window_function[window_length];
+
+#define hann(i)     (.50 * (1. - cos(2. * M_PI * (i) / (window_length - 1))))
+#define hamming(i)  (.54 - .46 * cos(2. * M_PI * (i) / (window_length - 1)))
+#define use_window  hamming
 
 static double iq_buffer[2][buffer_size];
 static uint16_t iq_index[2];
@@ -42,6 +49,7 @@ static uint16_t iq_index[2];
 #define cb_mask(n) (sizeof(n##_buffer[0]) / sizeof(n##_buffer[0][0]) - 1)
 #define cb_write(n, c, v) (n##_buffer[c][(n##_index[c]++) & cb_mask(n)] = (v))
 #define cb_readn(n, c, i) (n##_buffer[c][(n##_index[c] + (~i)) & cb_mask(n)])
+
 #define fft_magnitude(bin) (                        \
     __real__ fft_out[bin] * __real__ fft_out[bin] + \
     __imag__ fft_out[bin] * __imag__ fft_out[bin]   \
@@ -89,7 +97,7 @@ uint16_t validate_output(const uint8_t *packet, const uint16_t length) {
     return 0;
 }
 
-void bit_slicer(const uint8_t channel, const int32_t amplitude) {
+forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     static int32_t pcm_buffer[2][buffer_size];
     static uint16_t pcm_index[2];
     static int32_t sliding_sum[2];
@@ -156,13 +164,16 @@ void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     }
 }
 
-void sliding_fft(const double i_sample, const double q_sample) {
+forceinline void sliding_fft(const double i_sample, const double q_sample) {
     uint16_t i;
 
     cb_write(iq, 0, i_sample);
     cb_write(iq, 1, q_sample);
 
-    for (i = 0; i < fft_points; i++) {
+#if fft_points != window_length
+    memset(fft_inp, 0, sizeof(fftw_complex) * fft_points);
+#endif
+    for (i = 0; i < window_length; i++) {
         __real__ fft_inp[i] = cb_readn(iq, 0, i) * window_function[i];
         __imag__ fft_inp[i] = cb_readn(iq, 1, i) * window_function[i];
     }
@@ -183,8 +194,8 @@ int main(int argc, char **argv) {
     fft_out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * fft_points);
     fft_plan = fftw_plan_dft_1d(fft_points, fft_inp, fft_out, FFTW_FORWARD, FFTW_MEASURE);
 
-    for (i = 0; i < fft_points; i++)
-        window_function[i] = .5 * (1. - cos(2. * M_PI * i / (fft_points - 1)));
+    for (i = 0; i < window_length; i++)
+        window_function[i] = use_window(i);
 
     while (!feof(stdin)) {
         len = fread(raw_buffer, sizeof(uint16_t), buffer_size / 2, stdin);
