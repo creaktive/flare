@@ -11,17 +11,13 @@
 
 #define symbol_samples      (16)
 #define symbol_rate         (100000)
-#define freq_mark           (150000)
-#define freq_space          (50000)
 #define buffer_size         (1 << 13)
 #define max_packet_bytes    (29)
 #define preamble_bits       (20)
 #define packet_samples      (symbol_samples * 2 * (preamble_bits + max_packet_bytes * 8))
-#define window_length       (symbol_samples * 2)
-#define fft_points          (symbol_samples * 2)
+#define window_length       (symbol_samples)
+#define fft_points          (symbol_samples)
 #define sample_rate         (symbol_rate * symbol_samples)
-#define bin_mark            (freq_mark  / (sample_rate / fft_points))
-#define bin_space           (freq_space / (sample_rate / fft_points))
 
 #if buffer_size < packet_samples
 #error "Adjust buffer_size to fit at least one packet + preamble!"
@@ -165,7 +161,7 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
 }
 
 forceinline void sliding_fft(const double i_sample, const double q_sample) {
-    uint16_t i;
+    uint16_t i, j;
 
     cb_write(iq, 0, i_sample);
     cb_write(iq, 1, q_sample);
@@ -173,15 +169,15 @@ forceinline void sliding_fft(const double i_sample, const double q_sample) {
 #if fft_points != window_length
     memset(fft_inp, 0, sizeof(fftw_complex) * fft_points);
 #endif
-    for (i = 0; i < window_length; i++) {
-        __real__ fft_inp[i] = cb_readn(iq, 0, i) * window_function[i];
-        __imag__ fft_inp[i] = cb_readn(iq, 1, i) * window_function[i];
+    for (i = 0, j = window_length - 1; i < window_length; i++, j--) {
+        __real__ fft_inp[i] = cb_readn(iq, 0, j) * window_function[j];
+        __imag__ fft_inp[i] = cb_readn(iq, 1, j) * window_function[j];
     }
 
     fftw_execute(fft_plan);
 
-    bit_slicer(0, fft_magnitude(fft_points - bin_space) - fft_magnitude(fft_points - bin_mark));
-    bit_slicer(1, fft_magnitude(bin_mark) - fft_magnitude(bin_space));
+    bit_slicer(0, fft_magnitude(3) - fft_magnitude(4));
+    bit_slicer(1, fft_magnitude(1) - fft_magnitude(2));
 }
 
 int main(int argc, char **argv) {
