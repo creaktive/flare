@@ -39,17 +39,14 @@ static double window_function[window_length];
 #define hamming(i)  (.54 - .46 * cos(2. * M_PI * (i) / (window_length - 1)))
 #define use_window  hamming
 
-static double iq_buffer[2][buffer_size];
-static uint16_t iq_index[2];
+static complex double cb_buf_iq[buffer_size];
+static uint16_t cb_idx_iq;
 
-#define cb_mask(n) (sizeof(n##_buffer[0]) / sizeof(n##_buffer[0][0]) - 1)
-#define cb_write(n, c, v) (n##_buffer[c][(n##_index[c]++) & cb_mask(n)] = (v))
-#define cb_readn(n, c, i) (n##_buffer[c][(n##_index[c] + (~i)) & cb_mask(n)])
+#define cb_mask(n) (sizeof(cb_buf_##n) / sizeof(cb_buf_##n[0]) - 1)
+#define cb_write(n, v) (cb_buf_##n[(cb_idx_##n++) & cb_mask(n)] = (v))
+#define cb_readn(n, i) (cb_buf_##n[(cb_idx_##n + (~i)) & cb_mask(n)])
 
-#define fft_magnitude(bin) (                        \
-    __real__ fft_out[bin] * __real__ fft_out[bin] + \
-    __imag__ fft_out[bin] * __imag__ fft_out[bin]   \
-)
+#define magnitude(v) (creal(v) * creal(v) + cimag(v) * cimag(v))
 #define bit_compare(v) ((v) > threshold ? 1 : 0)
 
 const uint8_t preamble_pattern[preamble_bits] = { 1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0 };
@@ -70,11 +67,8 @@ uint16_t validate_output(const uint8_t *packet, const uint16_t length) {
             timestamp = tv.tv_sec + tv.tv_usec / 1e6;
             timestamp -= (buffer_size / sample_rate) * 2;
 
-            for (j = 0, rms = 0; j < packet_samples; j++) {
-                rms +=
-                    cb_readn(iq, 0, j) * cb_readn(iq, 0, j) +
-                    cb_readn(iq, 1, j) * cb_readn(iq, 1, j);
-            }
+            for (j = 0, rms = 0; j < packet_samples; j++)
+                rms += magnitude(cb_readn(iq, j));
             rms /= packet_samples;
 
             snprintf(output + (i + 1) * 2, sizeof(output) + (i + 1) * 2,
@@ -94,8 +88,8 @@ uint16_t validate_output(const uint8_t *packet, const uint16_t length) {
 }
 
 forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
-    static int32_t pcm_buffer[2][buffer_size];
-    static uint16_t pcm_index[2];
+    static int32_t cb_buf_pcm[2][buffer_size];
+    static uint16_t cb_idx_pcm[2];
     static int32_t sliding_sum[2];
     static uint16_t skip_samples[2];
     static uint8_t packet[max_packet_bytes];
@@ -105,9 +99,9 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     uint8_t manchester_bits[packet_samples / symbol_samples];
     uint16_t bit_position, byte_position;
 
-    cb_write(pcm, channel, amplitude);
+    cb_write(pcm[channel], amplitude);
 
-    sliding_sum[channel] -= cb_readn(pcm, channel, packet_samples);
+    sliding_sum[channel] -= cb_readn(pcm[channel], packet_samples);
     sliding_sum[channel] += amplitude;
 
     if (skip_samples[channel]) {
@@ -124,7 +118,7 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     ) {
         average = 0.;
         for (k = 0; k < symbol_samples; k++)
-            average += cb_readn(pcm, channel, i + k);
+            average += cb_readn(pcm[channel], i + k);
         if (preamble_pattern[j] == bit_compare(average))
             l++; else break;
     }
@@ -137,7 +131,7 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
         ) {
             average = 0.;
             for (k = 0; k < symbol_samples; k++)
-                average += cb_readn(pcm, channel, i + k);
+                average += cb_readn(pcm[channel], i + k);
             manchester_bits[j] = bit_compare(average);
 
             if (j % 2) {
@@ -160,24 +154,21 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     }
 }
 
-forceinline void sliding_fft(const double i_sample, const double q_sample) {
+forceinline void sliding_fft(const complex double sample) {
     uint16_t i, j;
 
-    cb_write(iq, 0, i_sample);
-    cb_write(iq, 1, q_sample);
+    cb_write(iq, sample);
 
 #if fft_points != window_length
     memset(fft_inp, 0, sizeof(fftw_complex) * fft_points);
 #endif
-    for (i = 0, j = window_length - 1; i < window_length; i++, j--) {
-        __real__ fft_inp[i] = cb_readn(iq, 0, j) * window_function[j];
-        __imag__ fft_inp[i] = cb_readn(iq, 1, j) * window_function[j];
-    }
+    for (i = 0, j = window_length - 1; i < window_length; i++, j--)
+        fft_inp[i] = cb_readn(iq, j) * window_function[j];
 
     fftw_execute(fft_plan);
 
-    bit_slicer(0, fft_magnitude(3) - fft_magnitude(4));
-    bit_slicer(1, fft_magnitude(1) - fft_magnitude(2));
+    bit_slicer(0, magnitude(fft_out[1]) - magnitude(fft_out[2]));
+    bit_slicer(1, magnitude(fft_out[3]) - magnitude(fft_out[4]));
 }
 
 int main(int argc, char **argv) {
@@ -196,7 +187,7 @@ int main(int argc, char **argv) {
     while (!feof(stdin)) {
         len = fread(raw_buffer, sizeof(uint16_t), buffer_size / 2, stdin);
         for (c = 0; c < len * 2; c += 2)
-            sliding_fft(raw_buffer[c] - 127., raw_buffer[c + 1] - 127.);
+            sliding_fft(CMPLX(raw_buffer[c] - 127, raw_buffer[c + 1] - 127));
     }
 
     fftw_free(fft_inp);
