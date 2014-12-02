@@ -1,7 +1,7 @@
 #include <complex.h>
-#include <fftw3.h>
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
 
@@ -16,7 +16,7 @@
 #define preamble_bits       (20)
 #define packet_samples      (symbol_samples * 2 * (preamble_bits + max_packet_bytes * 8))
 #define window_length       (symbol_samples)
-#define fft_points          (symbol_samples)
+#define dft_points          (symbol_samples)
 #define sample_rate         (symbol_rate * symbol_samples)
 
 #if buffer_size < packet_samples
@@ -27,17 +27,7 @@
 #error "buffer_size has to be a power of 2!"
 #endif
 
-#if symbol_samples & (symbol_samples - 1)
-#warning "FFTW is inefficient for the selected sample rate!"
-#endif
-
-static fftw_complex *fft_inp, *fft_out;
-static fftw_plan fft_plan;
-static double window_function[window_length];
-
-#define hann(i)     (.50 * (1. - cos(2. * M_PI * (i) / (window_length - 1))))
-#define hamming(i)  (.54 - .46 * cos(2. * M_PI * (i) / (window_length - 1)))
-#define use_window  hamming
+static complex double coeffs[dft_points];
 
 static complex double cb_buf_iq[buffer_size];
 static uint16_t cb_idx_iq;
@@ -79,6 +69,8 @@ uint16_t validate_output(const uint8_t *packet, const uint16_t length) {
 
             puts(output);
             fflush(stdout);
+
+            /* memset((void *) packet, 0, max_packet_bytes); */
 
             return packet_samples;
         }
@@ -154,21 +146,18 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     }
 }
 
-forceinline void sliding_fft(const complex double sample) {
-    uint16_t i, j;
+forceinline void sliding_dft(const complex double sample) {
+    uint16_t i;
+    static complex double dft[dft_points];
 
     cb_write(iq, sample);
 
-#if fft_points != window_length
-    memset(fft_inp, 0, sizeof(fftw_complex) * fft_points);
-#endif
-    for (i = 0, j = window_length - 1; i < window_length; i++, j--)
-        fft_inp[i] = cb_readn(iq, j) * window_function[j];
+    for (i = 1; i <= 4; i++)
+        dft[i] = (dft[i] - cb_readn(iq, window_length) + sample)
+            * coeffs[i];
 
-    fftw_execute(fft_plan);
-
-    bit_slicer(0, magnitude(fft_out[1]) - magnitude(fft_out[2]));
-    bit_slicer(1, magnitude(fft_out[3]) - magnitude(fft_out[4]));
+    bit_slicer(0, magnitude(dft[1]) - magnitude(dft[2]));
+    bit_slicer(1, magnitude(dft[3]) - magnitude(dft[4]));
 }
 
 int main(int argc, char **argv) {
@@ -177,22 +166,14 @@ int main(int argc, char **argv) {
     uint8_t raw_buffer[buffer_size * 2];
     uint16_t c;
 
-    fft_inp = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * fft_points);
-    fft_out = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * fft_points);
-    fft_plan = fftw_plan_dft_1d(fft_points, fft_inp, fft_out, FFTW_FORWARD, FFTW_MEASURE);
-
-    for (i = 0; i < window_length; i++)
-        window_function[i] = use_window(i);
+    for (i = 0; i < dft_points; i++)
+        coeffs[i] = cexp(I * 2. * M_PI * i / dft_points);
 
     while (!feof(stdin)) {
         len = fread(raw_buffer, sizeof(uint16_t), buffer_size / 2, stdin);
         for (c = 0; c < len * 2; c += 2)
-            sliding_fft(CMPLX(raw_buffer[c] - 127, raw_buffer[c + 1] - 127));
+            sliding_dft((raw_buffer[c] - 127) + I * (raw_buffer[c + 1] - 127));
     }
-
-    fftw_free(fft_inp);
-    fftw_free(fft_out);
-    fftw_destroy_plan(fft_plan);
 
     return 0;
 }
