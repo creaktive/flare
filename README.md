@@ -14,3 +14,4 @@ rtl_sdr -f 868.05m -s 1.6m -g 0 -p 49 - | ./nrf905_demod | ./flarm_decode 43.21 
  - [Implementation of Digital Signal Processing: Some Background on GFSK Modulation](http://wwwhome.ewi.utwente.nl/~gerezsh/sendfile/sendfile.php/gfsk-intro.pdf?sendfile=gfsk-intro.pdf)
  - [An Arctangent Type Wideband PM/FM Demodulator with Improved Performances](http://ketabkhanemelli.com/Scientific/IEEE/iel2/565/3783/00140755.pdf)
  - [nRF905 Single chip 433/868/915MHz Transceiver Product Specification](http://www.nordicsemi.com/eng/content/download/2452/29528/file/Product_Specification_nRF905_v1.5.pdf)
+ - [The Sliding DFT](http://www.comm.toronto.edu/~dimitris/ece431/slidingdft.pdf)

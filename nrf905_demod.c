@@ -15,7 +15,6 @@
 #define max_packet_bytes    (29)
 #define preamble_bits       (20)
 #define packet_samples      (symbol_samples * 2 * (preamble_bits + max_packet_bytes * 8))
-#define window_length       (symbol_samples)
 #define dft_points          (symbol_samples)
 #define sample_rate         (symbol_rate * symbol_samples)
 
@@ -153,8 +152,7 @@ forceinline void sliding_dft(const complex double sample) {
     cb_write(iq, sample);
 
     for (i = 1; i <= 4; i++)
-        dft[i] = (dft[i] - cb_readn(iq, window_length) + sample)
-            * coeffs[i];
+        dft[i] = (dft[i] - cb_readn(iq, dft_points) + sample) * coeffs[i];
 
     bit_slicer(0, magnitude(dft[1]) - magnitude(dft[2]));
     bit_slicer(1, magnitude(dft[3]) - magnitude(dft[4]));
