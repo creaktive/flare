@@ -26,9 +26,9 @@
 #error "buffer_size has to be a power of 2!"
 #endif
 
-static complex double coeffs[dft_points];
+static complex float coeffs[dft_points];
 
-static complex double cb_buf_iq[buffer_size];
+static complex float cb_buf_iq[buffer_size];
 static uint16_t cb_idx_iq;
 
 #define cb_mask(n) (sizeof(cb_buf_##n) / sizeof(cb_buf_##n[0]) - 1)
@@ -145,10 +145,13 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     }
 }
 
-forceinline void sliding_dft(const complex double sample) {
+forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
+    complex float sample;
     uint16_t i;
-    static complex double dft[dft_points];
+    static complex float dft[dft_points];
 
+    __real__ sample = i_sample;
+    __imag__ sample = q_sample;
     cb_write(iq, sample);
 
     for (i = 1; i <= 4; i++)
@@ -170,7 +173,7 @@ int main(int argc, char **argv) {
     while (!feof(stdin)) {
         len = fread(raw_buffer, sizeof(uint16_t), buffer_size / 2, stdin);
         for (c = 0; c < len * 2; c += 2)
-            sliding_dft((raw_buffer[c] - 127) + I * (raw_buffer[c + 1] - 127));
+            sliding_dft(raw_buffer[c] - 127, raw_buffer[c + 1] - 127);
     }
 
     return 0;
