@@ -146,7 +146,7 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
 }
 
 forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
-    complex float sample;
+    complex float sample, prev_sample;
     uint16_t i;
     static complex float dft[dft_points];
 
@@ -154,8 +154,9 @@ forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
     __imag__ sample = q_sample;
     cb_write(iq, sample);
 
+    prev_sample = cb_readn(iq, dft_points);
     for (i = 1; i <= 4; i++)
-        dft[i] = (dft[i] - cb_readn(iq, dft_points) + sample) * coeffs[i];
+        dft[i] = (dft[i] - prev_sample + sample) * coeffs[i];
 
     bit_slicer(0, magnitude(dft[1]) - magnitude(dft[2]));
     bit_slicer(1, magnitude(dft[3]) - magnitude(dft[4]));
@@ -165,15 +166,14 @@ int main(int argc, char **argv) {
     uint16_t i;
     size_t len;
     uint8_t raw_buffer[buffer_size * 2];
-    uint16_t c;
 
     for (i = 0; i < dft_points; i++)
         coeffs[i] = cexp(I * 2. * M_PI * i / dft_points);
 
     while (!feof(stdin)) {
-        len = fread(raw_buffer, sizeof(uint16_t), buffer_size / 2, stdin);
-        for (c = 0; c < len * 2; c += 2)
-            sliding_dft(raw_buffer[c] - 127, raw_buffer[c + 1] - 127);
+        len = fread(raw_buffer, sizeof(raw_buffer[0]), sizeof(raw_buffer), stdin);
+        for (i = 0; i < len; i += 2)
+            sliding_dft(raw_buffer[i] - 127, raw_buffer[i + 1] - 127);
     }
 
     return 0;
