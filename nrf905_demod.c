@@ -17,6 +17,7 @@
 #define packet_samples      (symbol_samples * 2 * (preamble_bits + max_packet_bytes * 8))
 #define dft_points          (symbol_samples)
 #define sample_rate         (symbol_rate * symbol_samples)
+#define average_n           (4)
 
 #if buffer_size < packet_samples
 #error "Adjust buffer_size to fit at least one packet + preamble!"
@@ -36,7 +37,6 @@ static uint16_t cb_idx_iq;
 #define cb_readn(n, i) (cb_buf_##n[(cb_idx_##n + (~i)) & cb_mask(n)])
 
 #define magnitude(v) (creal(v) * creal(v) + cimag(v) * cimag(v))
-#define bit_compare(v) ((v) > threshold ? 1 : 0)
 
 const uint8_t preamble_pattern[preamble_bits] = { 1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0 };
 
@@ -68,7 +68,6 @@ uint16_t validate_output(const uint8_t *packet, const uint16_t length) {
 
             puts(output);
             fflush(stdout);
-
             /* memset((void *) packet, 0, max_packet_bytes); */
 
             return packet_samples;
@@ -81,68 +80,59 @@ uint16_t validate_output(const uint8_t *packet, const uint16_t length) {
 forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     static int32_t cb_buf_pcm[2][buffer_size];
     static uint16_t cb_idx_pcm[2];
+    static uint8_t cb_buf_bit[2][buffer_size];
+    static uint16_t cb_idx_bit[2];
     static int32_t sliding_sum[2];
     static uint16_t skip_samples[2];
     static uint8_t packet[max_packet_bytes];
-    uint16_t i, j, k, l;
-    int32_t threshold;
-    int32_t average;
-    uint8_t manchester_bits[packet_samples / symbol_samples];
-    uint16_t bit_position, byte_position;
+    uint16_t i, j, k;
+    uint16_t bad_manchester;
 
     cb_write(pcm[channel], amplitude);
 
-    sliding_sum[channel] -= cb_readn(pcm[channel], packet_samples);
+    sliding_sum[channel] -= cb_readn(pcm[channel], average_n);
     sliding_sum[channel] += amplitude;
+
+    cb_write(bit[channel], sliding_sum[channel] > 0 ? 1 : 0);
 
     if (skip_samples[channel]) {
         skip_samples[channel]--;
         return;
     }
 
-    threshold = sliding_sum[channel] / (packet_samples / symbol_samples);
-
     for (
-        i = packet_samples, j = l = 0;
+        i = packet_samples, j = 0;
         j < preamble_bits;
         i -= symbol_samples, j++
     ) {
-        average = 0.;
-        for (k = 0; k < symbol_samples; k++)
-            average += cb_readn(pcm[channel], i + k);
-        if (preamble_pattern[j] == bit_compare(average))
-            l++; else break;
+        if (preamble_pattern[j] != cb_readn(bit[channel], i))
+            return;
     }
 
-    if (l == preamble_bits) {
-        for (
-            i = packet_samples - preamble_bits * symbol_samples, j = 0;
-            j < max_packet_bytes * symbol_samples;
-            i -= symbol_samples, j++
-        ) {
-            average = 0.;
-            for (k = 0; k < symbol_samples; k++)
-                average += cb_readn(pcm[channel], i + k);
-            manchester_bits[j] = bit_compare(average);
-
-            if (j % 2) {
-                if (manchester_bits[j] != manchester_bits[j - 1]) {
-                    // valid Manchester
-                    bit_position = j / 2;
-                    byte_position = bit_position / 8;
-                    if (manchester_bits[j]) {
-                        // set to 0
-                        packet[byte_position] &= ~(1 << (7 - (bit_position & 7)));
-                    } else {
-                        // set to 1
-                        packet[byte_position] |=  (1 << (7 - (bit_position & 7)));
-                    }
-                }
+    bad_manchester = 0;
+    for (
+        i = packet_samples - preamble_bits * symbol_samples, j = 0;
+        i > symbol_samples;
+        i -= symbol_samples * 2, j++
+    ) {
+        if (cb_readn(bit[channel], i) != cb_readn(bit[channel], i + symbol_samples)) {
+            // valid Manchester
+            k = j / 8;
+            if (cb_readn(bit[channel], i)) {
+                // set to 1
+                packet[k] |=  (1 << (7 - (j & 7)));
+            } else {
+                // set to 0
+                packet[k] &= ~(1 << (7 - (j & 7)));
             }
+        } else {
+            // heuristic, skip if too many bit encoding errors
+            if (++bad_manchester > j / 2)
+                return;
         }
-
-        skip_samples[channel] = validate_output((const uint8_t *) packet, max_packet_bytes);
     }
+
+    skip_samples[channel] = validate_output((const uint8_t *) packet, max_packet_bytes);
 }
 
 forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
