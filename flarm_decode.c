@@ -53,7 +53,7 @@ float haversine (float lat1, float lon1, float lat2, float lon2) {
     return d;
 }
 
-char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_alt, float timestamp, float rssi, int16_t channel) {
+char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_alt, double timestamp, float rssi, int16_t channel) {
     xtea_decrypt(6, (uint32_t *) pkt + 1, key1);
     xtea_decrypt(6, (uint32_t *) pkt + 3, key2);
 
@@ -99,7 +99,8 @@ char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_
 }
 
 int main(int argc, char **argv) {
-    float ref_lat, ref_lon, timestamp, rssi;
+    float ref_lat, ref_lon, rssi;
+    double timestamp;
     int16_t channel = -1;
     int16_t ref_alt = 0;
     char *line = NULL;
@@ -140,7 +141,7 @@ int main(int argc, char **argv) {
         if (crc16 == 0) {
             timestamp = rssi = channel = 0;
             if (p++ < q)
-                sscanf(p, "%f %f %hd", &timestamp, &rssi, &channel);
+                sscanf(p, "%lf %f %hd", &timestamp, &rssi, &channel);
 
             q = flarm_decode(
                 (flarm_packet *) (buf + 3),
