@@ -82,7 +82,7 @@ char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_
     if (fabs(rssi) > 0.01) {
         json_concat("\"rssi\":%.01f,", rssi);
     }
-    if (channel >= 0) {
+    if (channel > 0) {
         json_concat("\"channel\":%d,", channel);
     }
     json_concat("\"lat\":%.07f,", lat / 1e7);
