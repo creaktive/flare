@@ -2,7 +2,7 @@
 
 ```bash
 make
-rtl_sdr -f 868.05m -s 1.6m -g 0 -p 49 - | ./nrf905_demod | ./flarm_decode 43.21 5.43 12
+rtl_sdr -f 868.15m -s 1.6m -g 0 -p 49 - | ./nrf905_demod | ./flarm_decode 43.21 5.43 12
 ```
 
 # References

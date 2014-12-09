@@ -11,20 +11,21 @@
 
 #define symbol_samples      (16)
 #define symbol_rate         (100000)
-#define buffer_size         (1 << 13)
 #define max_packet_bytes    (29)
 #define preamble_bits       (20)
 #define packet_samples      (symbol_samples * 2 * (preamble_bits + max_packet_bytes * 8))
 #define dft_points          (symbol_samples)
 #define sample_rate         (symbol_rate * symbol_samples)
-#define average_n           (4)
+#define buffer_size         (1 << 13)
+#define smooth_buffer_size  (1 << 3)
+#define average_n           (7)
 
 #if buffer_size < packet_samples
 #error "Adjust buffer_size to fit at least one packet + preamble!"
 #endif
 
-#if buffer_size & (buffer_size - 1)
-#error "buffer_size has to be a power of 2!"
+#if (buffer_size & (buffer_size - 1)) || (smooth_buffer_size & (smooth_buffer_size - 1))
+#error "buffer sizes has to be a power of 2!"
 #endif
 
 static complex float coeffs[dft_points];
@@ -40,45 +41,36 @@ static uint16_t cb_idx_iq;
 
 const uint8_t preamble_pattern[preamble_bits] = { 1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0 };
 
-uint16_t validate_output(const uint8_t *packet, const uint16_t length) {
+void output(const uint8_t *packet, const uint16_t length, const uint8_t channel) {
     uint16_t i, j;
     char output[128], *p;
-    uint16_t crc16 = 0xffff;
     struct timeval tv;
     double timestamp, rms;
 
-    for (i = 0, p = output; i < length; i++, p += 2) {
-        crc16 = update_crc_ccitt(crc16, packet[i]);
+    for (i = 0, p = output; i < length; i++, p += 2)
         snprintf(p, 3, "%02x", packet[i]);
 
-        if (crc16 == 0) {
-            gettimeofday(&tv, NULL);
-            timestamp = tv.tv_sec + tv.tv_usec / 1e6;
-            timestamp -= (buffer_size / sample_rate) * 2;
+    gettimeofday(&tv, NULL);
+    timestamp = tv.tv_sec + tv.tv_usec / 1e6;
+    timestamp -= (buffer_size / sample_rate) * 2;
 
-            for (j = 0, rms = 0; j < packet_samples; j++)
-                rms += magnitude(cb_readn(iq, j));
-            rms /= packet_samples;
+    for (j = 0, rms = 0; j < packet_samples; j++)
+        rms += magnitude(cb_readn(iq, j));
+    rms /= packet_samples;
 
-            snprintf(output + (i + 1) * 2, sizeof(output) + (i + 1) * 2,
-                    "\t%.06f\t%.01f",
-                    timestamp,
-                    20.0 * log10(sqrt(rms) / 181.019336)
-            );
+    snprintf(output + i * 2, sizeof(output) + i * 2,
+            "\t%.06f\t%.01f\t%d",
+            timestamp,
+            20.0 * log10(sqrt(rms) / 181.019336),
+            channel + 117 // freq = (422.4 + (CH_NO / 10)) * (1 + HFREQ_PLL) MHz
+    );
 
-            puts(output);
-            fflush(stdout);
-            /* memset((void *) packet, 0, max_packet_bytes); */
-
-            return packet_samples;
-        }
-    }
-
-    return 0;
+    puts(output);
+    fflush(stdout);
 }
 
 forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
-    static int32_t cb_buf_pcm[2][buffer_size];
+    static int32_t cb_buf_pcm[2][smooth_buffer_size];
     static uint16_t cb_idx_pcm[2];
     static uint8_t cb_buf_bit[2][buffer_size];
     static uint16_t cb_idx_bit[2];
@@ -87,6 +79,7 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     static uint8_t packet[max_packet_bytes];
     uint16_t i, j, k;
     uint16_t bad_manchester;
+    uint16_t crc16 = 0xffff;
 
     cb_write(pcm[channel], amplitude);
 
@@ -115,9 +108,9 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
         i > symbol_samples;
         i -= symbol_samples * 2, j++
     ) {
+        k = j / 8;
         if (cb_readn(bit[channel], i) != cb_readn(bit[channel], i + symbol_samples)) {
             // valid Manchester
-            k = j / 8;
             if (cb_readn(bit[channel], i)) {
                 // set to 1
                 packet[k] |=  (1 << (7 - (j & 7)));
@@ -130,9 +123,18 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
             if (++bad_manchester > j / 2)
                 return;
         }
-    }
 
-    skip_samples[channel] = validate_output((const uint8_t *) packet, max_packet_bytes);
+        if ((j & 7) == 7) {
+            crc16 = update_crc_ccitt(crc16, packet[k]);
+            if (crc16 == 0) {
+                k++;
+                output((const uint8_t *) packet, k, channel);
+                skip_samples[channel] = symbol_samples * 2 * (preamble_bits + k * 8);
+                /* memset((void *) packet, 0, sizeof(packet)); */
+                return;
+            }
+        }
+    }
 }
 
 forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
@@ -145,11 +147,11 @@ forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
     cb_write(iq, sample);
 
     prev_sample = cb_readn(iq, dft_points);
-    for (i = 1; i <= 4; i++)
+    for (i = 0; i < 4; i++)
         dft[i] = (dft[i] - prev_sample + sample) * coeffs[i];
 
-    bit_slicer(0, magnitude(dft[1]) - magnitude(dft[2]));
-    bit_slicer(1, magnitude(dft[3]) - magnitude(dft[4]));
+    bit_slicer(0, magnitude(dft[0]) - magnitude(dft[1]));
+    bit_slicer(1, magnitude(dft[2]) - magnitude(dft[3]));
 }
 
 int main(int argc, char **argv) {

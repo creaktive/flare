@@ -24,19 +24,19 @@ void xtea_decrypt(unsigned int num_rounds, uint32_t v[2], uint32_t const key[4])
 }
 
 /* https://metacpan.org/source/GRAY/Geo-Distance-XS-0.13/XS.xs */
-const double DEG_RADS = M_PI / 180.;
-const double KILOMETER_RHO = 6371.64;
-double haversine (double lat1, double lon1, double lat2, double lon2) {
+const float DEG_RADS = M_PI / 180.;
+const float KILOMETER_RHO = 6371.64;
+float haversine (float lat1, float lon1, float lat2, float lon2) {
     lat1 *= DEG_RADS; lon1 *= DEG_RADS;
     lat2 *= DEG_RADS; lon2 *= DEG_RADS;
-    double a = sin(0.5 * (lat2 - lat1));
-    double b = sin(0.5 * (lon2 - lon1));
-    double c = a * a + cos(lat1) * cos(lat2) * b * b;
-    double d = 2. * atan2(sqrt(c), sqrt(fabs(1. - c)));
+    float a = sin(0.5 * (lat2 - lat1));
+    float b = sin(0.5 * (lon2 - lon1));
+    float c = a * a + cos(lat1) * cos(lat2) * b * b;
+    float d = 2. * atan2(sqrt(c), sqrt(fabs(1. - c)));
     return d;
 }
 
-char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, int16_t ref_alt, double timestamp, double rssi) {
+char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_alt, float timestamp, float rssi, int16_t channel) {
     xtea_decrypt(6, (uint32_t *) pkt + 1, key1);
     xtea_decrypt(6, (uint32_t *) pkt + 3, key2);
 
@@ -65,6 +65,9 @@ char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, int16_t re
     if (fabs(rssi) > 0.01) {
         json_concat("\"rssi\":%.01f,", rssi);
     }
+    if (channel >= 0) {
+        json_concat("\"channel\":%d,", channel);
+    }
     json_concat("\"lat\":%.07f,", lat / 1e7);
     json_concat("\"lon\":%.07f,", lon / 1e7);
     json_concat("\"dist\":%.02f,", haversine(ref_lat, ref_lon, lat / 1e7, lon / 1e7) * KILOMETER_RHO * 1000);
@@ -79,7 +82,8 @@ char *flarm_decode(flarm_packet *pkt, double ref_lat, double ref_lon, int16_t re
 }
 
 int main(int argc, char **argv) {
-    double ref_lat, ref_lon, timestamp, rssi;
+    float ref_lat, ref_lon, timestamp, rssi;
+    int16_t channel = -1;
     int16_t ref_alt = 0;
     char *line = NULL;
     char *p, *q;
@@ -117,15 +121,16 @@ int main(int argc, char **argv) {
         }
 
         if (crc16 == 0) {
-            timestamp = rssi = 0;
+            timestamp = rssi = channel = 0;
             if (p++ < q)
-                sscanf(p, "%lf %lf", &timestamp, &rssi);
+                sscanf(p, "%f %f %hd", &timestamp, &rssi, &channel);
 
             q = flarm_decode(
                 (flarm_packet *) (buf + 3),
                 ref_lat, ref_lon, ref_alt,
                 timestamp,
-                rssi
+                rssi,
+                channel
             );
 
             puts(q);
