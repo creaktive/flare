@@ -164,11 +164,11 @@ forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
     cb_write(iq, sample);
 
     prev_sample = cb_readn(iq, dft_points);
-    for (i = 0; i < 4; i++)
+    for (i = 1; i <= 4; i++)
         dft[i] = (dft[i] - prev_sample + sample) * coeffs[i];
 
-    bit_slicer(0, magnitude(dft[0]) - magnitude(dft[1]));
-    bit_slicer(1, magnitude(dft[2]) - magnitude(dft[3]));
+    bit_slicer(0, magnitude(dft[1]) - magnitude(dft[2]));
+    bit_slicer(1, magnitude(dft[3]) - magnitude(dft[4]));
 }
 
 int main(int argc, char **argv) {
