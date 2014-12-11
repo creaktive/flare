@@ -24,8 +24,43 @@
 
 #include "lib_crc.h"
 
+/* Some subs are subs for organizational purposes only. They're not intended
+ * to be reused. GCC 4.8 seems smart enough to figure it out on it's own,
+ * but just in case, let's manually assure these are inlined.
+ */
 #define forceinline __inline__ __attribute__((always_inline)) static
 
+/* "Magic" constants... These come directly or indirectly from the nRF905
+ * specification. Here is a simplified explanation about how this program works.
+ * First of all, nRF905 sends two kinds of pulses: mark & space. Mark means "1"
+ * symbol and space means "0" (or vice-versa; who cares, more on this later).
+ * If you tune nRF905 to use 868.2MHz (AKA "channel 117"), space is sent at a
+ * slightly lower frequency (868.15MHz) while mark is sent at a slightly higher
+ * one (868.25MHz). There's nothing interesting at exactly 868.2MHz (at least,
+ * not for this program). So, fact #1: there's 100KHz separation between mark
+ * & space.
+ * Then, enter the sample rate. If we read 1 million of samples every second
+ * (1MHz sample rate) each symbol (and therefore, mark/space pulse) will be
+ * spread across just 10 samples. This means that we only have a serie of
+ * 10 values to figure out the frequency. By the way, this serie is in
+ * "time domain". Fourier transform turns it into "frequency domain".
+ * But for 10 input values, it will produce 10 output values.
+ * Thus, 10 samples => 10 frequencies. Which frequencies? Intuitively enough,
+ * our 1MHz sample rate is equally split in 10 "bins" spaced by 100KHz.
+ * Fact #2: each symbol has just enough samples to make it possible to
+ * discriminate mark/space. Which means that we can tune to 868.15MHz, and
+ * "bin 0" will filter our spaces, and "bin 1" will filter our marks...
+ * Except we can not use "bin 0", because it is somewhat special (DC).
+ * Instead, we tune to 868.05MHz and get "bin 1" as space and "bin 2" as mark.
+ * Then we get "bin 3" and "bin 4" as space & mark for the next channel
+ * (868.4MHz, AKA "channel 118"). And perhaps the next channel... And so on
+ * until "bin 6", which wraps and gets us a "negative frequency" (that is,
+ * something below 868.05MHz that we're tuned to). Let's not talk about bins
+ * 6-10 for now.
+ * Finally, fact #3: computers are not impressed when we round up our
+ * arithmetics to 10, they prefer 16. That's why the sampling rate is 1.6MHz
+ * and we have 16 samples per symbol.
+ */
 #define symbol_samples      (16)
 #define symbol_rate         (100000)
 #define max_packet_bytes    (29)
@@ -45,8 +80,20 @@
 #error "buffer sizes has to be a power of 2!"
 #endif
 
+/* Here we store the precomputed coefficients for Discrete Fourier Transform.
+ * "But isn't it terribly slow?!" Glad you asked; in this specific case,
+ * DFT is actually faster than FFT! That is because due to the nature of the
+ * demodulator, we can reuse the results of the computation of the previous
+ * samples. Besides that, we don't need all the 16 frequency bins for the 16
+ * samples, just 2 (mark/space) per channel.
+ */
 static complex float coeffs[dft_points];
 
+/* Our samples are stored in a circular buffer. It overwrites the oldest
+ * samples with the newest ones. Each raw I/Q sample pair from the RTL-SDR
+ * dongle is stored as one complex number. Because Fourier transforms work on
+ * complex numbers...
+ */
 static complex float cb_buf_iq[buffer_size];
 static uint16_t cb_idx_iq;
 
@@ -54,8 +101,16 @@ static uint16_t cb_idx_iq;
 #define cb_write(n, v) (cb_buf_##n[(cb_idx_##n++) & cb_mask(n)] = (v))
 #define cb_readn(n, i) (cb_buf_##n[(cb_idx_##n + (~i)) & cb_mask(n)])
 
+/* ...But to make any sense of the output, complex number has to be "squashed"
+ * into good old float.
+ */
 #define magnitude(v) (creal(v) * creal(v) + cimag(v) * cimag(v))
 
+/* Each nRF905 transmission starts with a pattern called "preamble". It is
+ * something that is clearly distinguishable from the noise. In this case,
+ * alternation of "0" and "1" symbols. We just try to match this specific bit
+ * pattern against the RF stream. Almost like regular expression.
+ */
 const uint8_t preamble_pattern[preamble_bits] = { 1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0 };
 
 void output(const uint8_t *packet, const uint16_t length, const uint8_t channel) {
