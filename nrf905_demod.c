@@ -89,27 +89,34 @@
  */
 static complex float coeffs[dft_points];
 
-/* Our samples are stored in a circular buffer. It overwrites the oldest
- * samples with the newest ones. Each raw I/Q sample pair from the RTL-SDR
- * dongle is stored as one complex number. Because Fourier transforms work on
- * complex numbers...
+/* Intermediary values of the signal demodulation process are stored in
+ * circular buffers. It works by overwriting the oldest values with the newest
+ * ones. Each circular buffer allocates 2 variables: the buffer (prefixed with
+ * "cb_buf_") and the current element index (prefixed with "cb_idx_").
  */
 static complex float cb_buf_iq[buffer_size];
 static uint16_t cb_idx_iq;
 
+/* Circular buffer accessors. These are macros instead of subroutines mainly
+ * because there are many different data types for buffers to handle. Raw I/Q
+ * samples are complex, magnitudes are integer, decoded bits are characters.
+ * cb_write(buffer_name, X) inserts X into the last position of the buffer.
+ * cb_readn(buffer_name, N) reads from Nth position of the buffer, where 0 is
+ * the last position, 1 is the previous position, and so on.
+ */
 #define cb_mask(n) (sizeof(cb_buf_##n) / sizeof(cb_buf_##n[0]) - 1)
 #define cb_write(n, v) (cb_buf_##n[(cb_idx_##n++) & cb_mask(n)] = (v))
 #define cb_readn(n, i) (cb_buf_##n[(cb_idx_##n + (~i)) & cb_mask(n)])
 
-/* ...But to make any sense of the output, complex number has to be "squashed"
- * into good old float.
+/* To make any sense of the output, complex number has to be "squashed" into
+ * good old float. However, we do not use sqrt() because it is too expensive!
  */
 #define magnitude(v) (creal(v) * creal(v) + cimag(v) * cimag(v))
 
 /* Each nRF905 transmission starts with a pattern called "preamble". It is
  * something that is clearly distinguishable from the noise. In this case,
  * alternation of "0" and "1" symbols. We just try to match this specific bit
- * pattern against the RF stream. Almost like regular expression.
+ * pattern against the RF stream. Almost like a regular expression.
  */
 const uint8_t preamble_pattern[preamble_bits] = { 1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0 };
 
@@ -122,10 +129,16 @@ void output(const uint8_t *packet, const uint16_t length, const uint8_t channel)
     for (i = 0, p = output; i < length; i++, p += 2)
         snprintf(p, 3, "%02x", packet[i]);
 
+    /* Since all the data was already in the buffer, compensate the timestamp
+     * subtracting the "time on the wire".
+     */
     gettimeofday(&tv, NULL);
     timestamp = tv.tv_sec + tv.tv_usec / 1e6;
     timestamp -= (buffer_size / sample_rate) * 2;
 
+    /* "RMS" as in "Root Mean Square".
+     * Estimate the power of the signal we've just decoded.
+     */
     for (j = 0, rms = 0; j < packet_samples; j++)
         rms += magnitude(cb_readn(iq, j));
     rms /= packet_samples;
@@ -133,7 +146,7 @@ void output(const uint8_t *packet, const uint16_t length, const uint8_t channel)
     snprintf(output + i * 2, sizeof(output) + i * 2,
             "\t%.06f\t%.01f\t%d",
             timestamp,
-            20.0 * log10(sqrt(rms) / 181.019336),
+            20.0 * log10(sqrt(rms) / 181.019336), // almost certainly wrong
             channel + 117 // freq = (422.4 + (CH_NO / 10)) * (1 + HFREQ_PLL) MHz
     );
 
@@ -142,6 +155,16 @@ void output(const uint8_t *packet, const uint16_t length, const uint8_t channel)
 }
 
 forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
+    /* Why is everything so "static"? As mentioned in the "forceinline"
+     * comment way above, these subroutines are not real subroutines. Thus we
+     * need to use "static" in order to preserve the buffer contents. Or use
+     * global variables.
+     * The best part is why the 'packet' buffer is also "static": nRF905
+     * resends the packets (sometimes on different channels). If we miss some
+     * bits on the first try, perhaps we manage to get them on the second
+     * attempt. Note that this is only possible because we differentiate
+     * "0" from "1" from "missing" during the decoding step!
+     */
     static int32_t cb_buf_pcm[2][smooth_buffer_size];
     static uint16_t cb_idx_pcm[2];
     static uint8_t cb_buf_bit[2][buffer_size];
@@ -153,18 +176,35 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     uint16_t bad_manchester;
     uint16_t crc16 = 0xffff;
 
+    /* Simplest possible noise filter (at least, in software): sliding average.
+     */
     cb_write(pcm[channel], amplitude);
 
     sliding_sum[channel] -= cb_readn(pcm[channel], average_n);
     sliding_sum[channel] += amplitude;
 
+    /* Input for bit_slicer() is the magnitude at the space pulse frequency minus
+     * the magnitude at the mark pulse frequency. If this value is positive,
+     * the space signal is stronger than the mark signal. Thus, by convention,
+     * we have the "0" symbol. Same thing happens for the "1" symbol.
+     * However, these symbols are not bits yet: actual bits are encoded using
+     * the Manchester coding.
+     */
     cb_write(bit[channel], sliding_sum[channel] > 0 ? 1 : 0);
 
+    /* Don't reprocess samples if we already decoded this as a valid message.
+     * This saves a lot of processing time, specially when dealing with busy
+     * channels.
+     */
     if (skip_samples[channel]) {
         skip_samples[channel]--;
         return;
     }
 
+    /* Attempt to match the preamble bit pattern. Bail out on the first
+     * discrepancy to spare CPU cycles. This is the hottest code path
+     * (most CPU-intensive).
+     */
     for (
         i = packet_samples, j = 0;
         j < preamble_bits;
@@ -174,6 +214,18 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
             return;
     }
 
+    /* When the preamble looks like valid, attempt to decode the rest of the
+     * packet. All the bits (including the preamble) are Manchester-coded.
+     * This means that the symbol values do not matter, only symbol transitions
+     * do encode the actual bits. For instance, "01" means "1", while "10" means
+     * "0". Both "00" and "11" are invalid, when one of these is detected, the
+     * bit is skipped (and the bit from the previous decoding attempt for this
+     * position is used). If there are too many invalid bits, probably the
+     * thing interpreted as preamble was a fluctuation in randomness, so we
+     * bail out. And yes, preamble is also Manchester-coded, in case you're
+     * wondering. nRF905 preamble is usually stated as having 10 bits. But
+     * Manchester-coded nRF905 preamble has 20 bits.
+     */
     bad_manchester = 0;
     for (
         i = packet_samples - preamble_bits * symbol_samples, j = 0;
@@ -196,10 +248,16 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
                 return;
         }
 
+        /* At the end of every 8-bit chunk, update CRC checksum. When the
+         * checksum is (looks like) correct, proceed and output the packet
+         * bytes, regardless the packet size. It is quite possible that some
+         * incompletely processed packet appears to have a correct CRC.
+         * If the desired packet size is known/fixed and/or CRC is unavailable,
+         * it is possible to use packet size as the "packet received" condition.
+         */
         if ((j & 7) == 7) {
             crc16 = update_crc_ccitt(crc16, packet[k]);
-            if (crc16 == 0) {
-                k++;
+            if (crc16 == 0 && ++k <= max_packet_bytes) {
                 output((const uint8_t *) packet, k, channel);
                 skip_samples[channel] = symbol_samples * 2 * (preamble_bits + k * 8);
                 /* memset((void *) packet, 0, sizeof(packet)); */
@@ -214,26 +272,63 @@ forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
     uint16_t i;
     static complex float dft[dft_points];
 
+    /* Each raw I/Q ("In-Phase/Quadrature") sample pair from the RTL-SDR dongle
+     * is stored as one complex float. Samples are not normalized (meaning the
+     * values are not within the range [0,1]) because division is expensive.
+     */
     __real__ sample = i_sample;
     __imag__ sample = q_sample;
     cb_write(iq, sample);
 
+    /* Compute the Discrete Fourier Transform for the last 'dft_points' samples.
+     * This works more-or-less like the moving average; instead of recalculating
+     * the entire thing for every 'dft_points' samples, we "add" the recent ones
+     * and "subtract" the oldest ones. Also, we don't compute the frequency bins
+     * for the frequencies we don't use, anyway.
+     * What kind of sorcery is this?! \(o_O)/
+     * Unfortunately, there's a downside: the frequency resolution is locked
+     * to the amount of samples per symbol. With Fast Fourier Transform, it is
+     * possible to apply some smart "window function" to overcome the resolution
+     * limitations. With Sliding DFT, the only practical window function is the
+     * rectangular one (AKA "none at all"). But, again, it is just enough to
+     * get the 100KHz resolution.
+     */
     prev_sample = cb_readn(iq, dft_points);
     for (i = 1; i <= 4; i++)
         dft[i] = (dft[i] - prev_sample + sample) * coeffs[i];
 
-    bit_slicer(0, magnitude(dft[1]) - magnitude(dft[2]));
-    bit_slicer(1, magnitude(dft[3]) - magnitude(dft[4]));
+    /* TODO: implement threads.
+     * Now that the channels are separated, each one can be handled by
+     * a different CPU. If only we have more than one CPU.
+     * How this works: for each channel, we subtract the power of signal at
+     * the mark frequency from the power of signal at the space frequency.
+     * This way, the noise floor (which is expected to be more-or-less the same
+     * at both frequencies) cancels out. It is feasible to use either mark
+     * or space frequencies alone, but that would require extra computation
+     * to tell signal apart from the noise floor.
+     */
+    bit_slicer(0, magnitude(dft[1]) - magnitude(dft[2])); // power at bins 1 & 2
+    bit_slicer(1, magnitude(dft[3]) - magnitude(dft[4])); // power at bins 3 & 4
 }
 
 int main(int argc, char **argv) {
     uint16_t i;
     size_t len;
-    uint8_t raw_buffer[buffer_size * 2];
+    uint8_t raw_buffer[buffer_size * 2]; // each I/Q sample has two bytes!
 
+    /* Pre-compute the DFT coefficients. We will only use some of them in
+     * sliding_dft().
+     */
     for (i = 0; i < dft_points; i++)
         coeffs[i] = cexp(I * 2. * M_PI * i / dft_points);
 
+    /* Read chunks of data piped from rtl_sdr utility and call sliding_dft()
+     * for each sample. The data comes in I/Q pairs, like: IQIQIQIQIQ...
+     * Individual values (either I or Q) range is (0, 255), and to convert to
+     * signed we need to subtract 127. No idea why RTL-SDR dongle doesn't use
+     * signed integer by default (looks like the hardware itself returns the
+     * data in this way).
+     */
     while (!feof(stdin)) {
         len = fread(raw_buffer, sizeof(raw_buffer[0]), sizeof(raw_buffer), stdin);
         for (i = 0; i < len; i += 2)
