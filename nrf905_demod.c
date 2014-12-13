@@ -120,6 +120,14 @@ static uint16_t cb_idx_iq;
  */
 const uint8_t preamble_pattern[preamble_bits] = { 1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0 };
 
+/* Subroutine: output()
+ * Description: print the decoded packet, timestamp, RSSI and channel ID
+ * Input:
+ *  packet: buffer with packet bytes
+ *  length: size of the packet
+ *  channel: ordinal of the channel buffer
+ * Output: none
+ */
 void output(const uint8_t *packet, const uint16_t length, const uint8_t channel) {
     uint16_t i, j;
     char output[128], *p;
@@ -154,6 +162,13 @@ void output(const uint8_t *packet, const uint16_t length, const uint8_t channel)
     fflush(stdout);
 }
 
+/* Subroutine: bit_slicer()
+ * Description: recover bits from the channel
+ * Input:
+ *  channel: up to 2 channels are supported for now
+ *  amplitude: sample value
+ * Output: none
+ */
 forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     /* Why is everything so "static"? As mentioned in the "forceinline"
      * comment way above, these subroutines are not real subroutines. Thus we
@@ -267,6 +282,13 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     }
 }
 
+/* Subroutine: sliding_dft()
+ * Description: transform the signal from time domain to frequency domain
+ * Input:
+ *  i_sample: In-Phase component
+ *  q_sample: Quadrature component
+ * Output: none
+ */
 forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
     complex float sample, prev_sample;
     uint16_t i;
@@ -311,6 +333,13 @@ forceinline void sliding_dft(const int8_t i_sample, const int8_t q_sample) {
     bit_slicer(1, magnitude(dft[3]) - magnitude(dft[4])); // power at bins 3 & 4
 }
 
+/* Subroutine: main()
+ * Description: get chunks of data from STDIN and forward to sliding_dft()
+ * Input:
+ *  argc: argument counter
+ *  argv: array of arguments
+ * Output: exit code
+ */
 int main(int argc, char **argv) {
     uint16_t i;
     size_t len;
