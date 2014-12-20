@@ -19,6 +19,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 
@@ -119,6 +120,10 @@ static uint16_t cb_idx_iq;
  * pattern against the RF stream. Almost like a regular expression.
  */
 const uint8_t preamble_pattern[preamble_bits] = { 1,0,1,0,1,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0 };
+
+/* Runtime configuration globals.
+ */
+static uint8_t packet_bytes = 0, use_crc = 1;
 
 /* Subroutine: output()
  * Description: print the decoded packet, timestamp, RSSI and channel ID
@@ -271,8 +276,8 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
          * it is possible to use packet size as the "packet received" condition.
          */
         if ((j & 7) == 7) {
-            crc16 = update_crc_ccitt(crc16, packet[k]);
-            if (crc16 == 0 && ++k <= max_packet_bytes) {
+            crc16 = use_crc ? update_crc_ccitt(crc16, packet[k]) : 0;
+            if (crc16 == 0 && ++k == (packet_bytes ? packet_bytes : k)) {
                 output((const uint8_t *) packet, k, channel);
                 skip_samples[channel] = symbol_samples * 2 * (preamble_bits + k * 8);
                 /* memset((void *) packet, 0, sizeof(packet)); */
@@ -344,6 +349,24 @@ int main(int argc, char **argv) {
     uint16_t i;
     size_t len;
     uint8_t raw_buffer[buffer_size * 2]; // each I/Q sample has two bytes!
+    int8_t param;
+
+    /* Accepts packet size as a parameter. When specified, the decoded packet
+     * have to have this exact size and a valid CRC-16. When negative, only
+     * the packet size is checked, and CRC-16 is not computed.
+     */
+    if (argc == 2) {
+        param = atoi(argv[1]);
+        packet_bytes = abs(param);
+        use_crc = param == packet_bytes;
+        if (packet_bytes > max_packet_bytes) {
+            fprintf(stderr, "can't decode more than %d bytes\n", max_packet_bytes);
+            return 2;
+        }
+    } else if (argc > 2) {
+        fprintf(stderr, "usage: %s [PACKET_BYTES]\n", argv[0]);
+        return 1;
+    }
 
     /* Pre-compute the DFT coefficients. We will only use some of them in
      * sliding_dft().
