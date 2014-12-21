@@ -23,7 +23,6 @@
 #include <string.h>
 
 #include "flarm_codec.h"
-#include "lib_crc.h"
 
 static uint32_t const key1[4] = FLARM_KEY1;
 static uint32_t const key2[4] = FLARM_KEY2;
@@ -108,7 +107,7 @@ int main(int argc, char **argv) {
     uint8_t buf[29];
     size_t len = 0;
     uint16_t i;
-    uint16_t crc16;
+    uint8_t offset;
 
     if (argc >= 3 && argc <= 4) {
         ref_lat = atof(argv[1]);
@@ -122,29 +121,30 @@ int main(int argc, char **argv) {
 
     while (getline(&line, &len, stdin) != -1) {
         i = 0;
-        crc16 = 0xffff;
         for (p = line, q = p + strlen(line) - 1; p < q; p++) {
             if (isxdigit(*p)
                 && isxdigit(*(p + 1))
                 && sscanf(p, "%2hhx", &buf[i]) == 1
             ) {
                 p++;
-                crc16 = update_crc_ccitt(crc16, buf[i]);
                 if (++i == sizeof(buf))
                     break;
             } else {
                 i = 0;
-                crc16 = 0xffff;
             }
         }
 
-        if (crc16 == 0) {
+        if (i == 24 || i == 29) {
             timestamp = rssi = channel = 0;
             if (p++ < q)
                 sscanf(p, "%lf %f %hd", &timestamp, &rssi, &channel);
 
+            offset = buf[0] == 0x0c && buf[1] == 0x9a && buf[2] == 0x93
+                ? 3
+                : 0;
+
             q = flarm_decode(
-                (flarm_packet *) (buf + 3),
+                (flarm_packet *) (buf + offset),
                 ref_lat, ref_lon, ref_alt,
                 timestamp,
                 rssi,
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
             puts(q);
             fflush(stdout);
         } else
-            fprintf(stderr, "record with bad CRC\n");
+            fprintf(stderr, "only packets with either 24 or 29 bytes are accepted\n");
     }
 
     return 0;
