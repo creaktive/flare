@@ -277,7 +277,8 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
          */
         if ((j & 7) == 7) {
             crc16 = use_crc ? update_crc_ccitt(crc16, packet[k]) : 0;
-            if (crc16 == 0 && ++k == (packet_bytes ? packet_bytes : k)) {
+            k++;
+            if (crc16 == 0 && k == (packet_bytes ? packet_bytes : k)) {
                 output((const uint8_t *) packet, k, channel);
                 skip_samples[channel] = symbol_samples * 2 * (preamble_bits + k * 8);
                 /* memset((void *) packet, 0, sizeof(packet)); */
