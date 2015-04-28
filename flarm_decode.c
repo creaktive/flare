@@ -24,19 +24,48 @@
 
 #include "flarm_codec.h"
 
-static uint32_t const key1[4] = FLARM_KEY1;
-static uint32_t const key2[4] = FLARM_KEY2;
+/* http://en.wikipedia.org/wiki/XXTEA */
+void btea(uint32_t *v, int8_t n, const uint32_t key[4]) {
+    uint32_t y, z, sum;
+    uint32_t p, rounds, e;
 
-/* https://en.wikipedia.org/wiki/XTEA#Implementations */
-void xtea_decrypt(unsigned int num_rounds, uint32_t v[2], uint32_t const key[4]) {
-    unsigned int i;
-    uint32_t v0 = v[0], v1 = v[1], delta = 0x9E3779B9, sum = delta * num_rounds;
-    for (i = 0; i < num_rounds; i++) {
-        v1 -= (((v0 << 4) ^ (v0 >> 5)) + v0) ^ (sum + key[(sum >> 11) & 3]);
-        sum -= delta;
-        v0 -= (((v1 << 4) ^ (v1 >> 5)) + v1) ^ (sum + key[sum & 3]);
+    #define DELTA 0x9e3779b9
+    // #define ROUNDS (6 + 52 / n)
+    #define ROUNDS 6
+    #define MX (((z >> 5 ^ y << 2) + (y >> 3 ^ z << 4)) ^ ((sum ^ y) + (key[(p & 3) ^ e] ^ z)))
+
+    if (n > 1) {
+        /* Coding Part */
+        rounds = ROUNDS;
+        sum = 0;
+        z = v[n - 1];
+        do {
+            sum += DELTA;
+            e = (sum >> 2) & 3;
+            for (p = 0; p < n - 1; p++) {
+                y = v[p + 1];
+                z = v[p] += MX;
+            }
+            y = v[0];
+            z = v[n - 1] += MX;
+        } while (--rounds);
+    } else if (n < -1) {
+        /* Decoding Part */
+        n = -n;
+        rounds = ROUNDS;
+        sum = rounds * DELTA;
+        y = v[0];
+        do {
+            e = (sum >> 2) & 3;
+            for (p = n - 1; p > 0; p--) {
+                z = v[p - 1];
+                y = v[p] -= MX;
+            }
+            z = v[n - 1];
+            y = v[0] -= MX;
+            sum -= DELTA;
+        } while (--rounds);
     }
-    v[0] = v0; v[1] = v1;
 }
 
 /* https://metacpan.org/source/GRAY/Geo-Distance-XS-0.13/XS.xs */
@@ -52,16 +81,31 @@ float haversine (float lat1, float lon1, float lat2, float lon2) {
     return d;
 }
 
+/* http://pastebin.com/####8bfm */
+long obscure(uint32_t key, uint32_t seed) {
+    uint32_t m1 = seed * (key ^ (key >> 16));
+    uint32_t m2 = (seed * (m1 ^ (m1 >> 16)));
+    return m2 ^ (m2 >> 16);
+}
+
+void make_key(uint32_t key[4], uint32_t timestamp, uint32_t address) {
+    static const uint32_t table[4] = FLARM_KEY1;
+    for (int8_t i = 0; i < 4; i++)
+        key[i] = obscure(table[i] ^ ((timestamp >> 6) ^ address), FLARM_KEY2) ^ FLARM_KEY3;
+}
+
 char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_alt, double timestamp, float rssi, int16_t channel) {
-    xtea_decrypt(6, (uint32_t *) pkt + 1, key1);
-    xtea_decrypt(6, (uint32_t *) pkt + 3, key2);
+    if (pkt->magic != 0x20) return NULL;
+
+    uint32_t key[4];
+    make_key(key, timestamp, (pkt->addr << 8) & 0xffffff);
+    btea((uint32_t *) pkt + 1, -5, key);
 
     int32_t round_lat = (int32_t) (ref_lat * 1e7) >> 7;
     int32_t lat = (((int16_t) ((pkt->lat - round_lat) & 0xffff) + round_lat) << 7) + 0x40;
 
-    uint8_t s = lat >= 4.5e8 ? 8 : 7;
-    int32_t round_lon = (int32_t) (ref_lon * 1e7) >> s;
-    int32_t lon = (((int16_t) ((pkt->lon - round_lon) & 0xffff) + round_lon) << s) + (1 << (s - 1));
+    int32_t round_lon = (int32_t) (ref_lon * 1e7) >> 7;
+    int32_t lon = (((int16_t) ((pkt->lon - round_lon) & 0xffff) + round_lon) << 7) + 0x40;
 
     int32_t vs = pkt->vs * (2 << (pkt->vsmult - 1));
 
@@ -89,7 +133,6 @@ char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_
     json_concat("\"dist\":%.02f,", haversine(ref_lat, ref_lon, lat / 1e7, lon / 1e7) * KILOMETER_RHO * 1000);
     json_concat("\"alt\":%d,", pkt->alt - ref_alt);
     json_concat("\"vs\":%d,", vs);
-    json_concat("\"stealth\":%d,", pkt->stealth);
     json_concat("\"type\":%d,", pkt->type);
     json_concat("\"ns\":[%d,%d,%d,%d],", pkt->ns[0], pkt->ns[1], pkt->ns[2], pkt->ns[3]);
     json_concat("\"ew\":[%d,%d,%d,%d]}", pkt->ew[1], pkt->ew[1], pkt->ew[2], pkt->ew[3]);
@@ -139,7 +182,7 @@ int main(int argc, char **argv) {
             if (p++ < q)
                 sscanf(p, "%lf %f %hd", &timestamp, &rssi, &channel);
 
-            offset = buf[0] == 0x0c && buf[1] == 0x9a && buf[2] == 0x93
+            offset = buf[0] == 0x31 && buf[1] == 0xfa && buf[2] == 0xb6
                 ? 3
                 : 0;
 
@@ -151,7 +194,7 @@ int main(int argc, char **argv) {
                 channel
             );
 
-            puts(q);
+            if (q) puts(q);
             fflush(stdout);
         } else
             fprintf(stderr, "only packets with either 24 or 29 bytes are accepted\n");
