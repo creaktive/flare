@@ -95,7 +95,7 @@ void make_key(uint32_t key[4], uint32_t timestamp, uint32_t address) {
         key[i] = obscure(table[i] ^ ((timestamp >> 6) ^ address), FLARM_KEY2) ^ FLARM_KEY3;
 }
 
-char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_alt, double timestamp, float rssi, int16_t channel) {
+char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_alt, double timestamp, float rssi, int16_t channel) {
     if (pkt->magic != 0x20) return NULL;
 
     uint32_t key[4];
@@ -103,10 +103,10 @@ char *flarm_decode(flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_
     btea((uint32_t *) pkt + 1, -5, key);
 
     int32_t round_lat = (int32_t) (ref_lat * 1e7) >> 7;
-    int32_t lat = (((int16_t) ((pkt->lat - round_lat) & 0xffff) + round_lat) << 7) + 0x40;
+    int32_t lat = ((((pkt->lat - round_lat) % 0x080000) + round_lat) << 7) + 0x40;
 
     int32_t round_lon = (int32_t) (ref_lon * 1e7) >> 7;
-    int32_t lon = (((int16_t) ((pkt->lon - round_lon) & 0xffff) + round_lon) << 7) + 0x40;
+    int32_t lon = ((((pkt->lon - round_lon) % 0x100000) + round_lon) << 7) + 0x40;
 
     int32_t vs = pkt->vs * (2 << (pkt->vsmult - 1));
 
