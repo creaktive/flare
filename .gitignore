@@ -21,6 +21,3 @@ nrf905_demod
 
 # Data files
 *.dat
-
-# U MAD?
-flarm_codec.h

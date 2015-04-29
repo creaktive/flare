@@ -81,7 +81,7 @@ float haversine (float lat1, float lon1, float lat2, float lon2) {
     return d;
 }
 
-/* http://pastebin.com/####8bfm */
+/* http://pastebin.com/YK2f8bfm */
 long obscure(uint32_t key, uint32_t seed) {
     uint32_t m1 = seed * (key ^ (key >> 16));
     uint32_t m2 = (seed * (m1 ^ (m1 >> 16)));
