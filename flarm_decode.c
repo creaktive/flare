@@ -103,10 +103,14 @@ char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_
     btea((uint32_t *) pkt + 1, -5, key);
 
     int32_t round_lat = (int32_t) (ref_lat * 1e7) >> 7;
-    int32_t lat = ((((pkt->lat - round_lat) % 0x080000) + round_lat) << 7) + 0x40;
+    int32_t lat = (pkt->lat - round_lat) % (uint32_t) 0x080000;
+    if (lat >= 0x040000) lat -= 0x080000;
+    lat = ((lat + round_lat) << 7) + 0x40;
 
     int32_t round_lon = (int32_t) (ref_lon * 1e7) >> 7;
-    int32_t lon = ((((pkt->lon - round_lon) % 0x100000) + round_lon) << 7) + 0x40;
+    int32_t lon = (pkt->lon - round_lon) % (uint32_t) 0x100000;
+    if (lon >= 0x080000) lon -= 0x100000;
+    lon = ((lon + round_lon) << 7) + 0x40;
 
     int32_t vs = pkt->vs * (2 << (pkt->vsmult - 1));
 

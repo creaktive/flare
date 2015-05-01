@@ -16,10 +16,10 @@ typedef struct {
     unsigned int gps:12;
     unsigned int type:4;
     /********************/
-    int lat:19;
+    unsigned int lat:19;
     unsigned int alt:13;
     /********************/
-    int lon:20;
+    unsigned int lon:20;
     unsigned int _unk1:10;
     unsigned int vsmult:2;
     /********************/
