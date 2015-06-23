@@ -1,10 +1,10 @@
 # nRF905 demodulator/FLARM decoder
 
 ```bash
-make
-rtl_sdr -f 868.05m -s 1.6m -g 49.6 -p 49 - |
-    ./nrf905_demod 29 |
-    ./flarm_decode 43.21 5.43 12
+make                                            # compile everything
+rtl_sdr -f 868.05m -s 1.6m -g 49.6 -p 49 - |    # tune to 868.05 MHz, set sample rate to 1.6 MHz, gain to 49.6 dB, and tuner error to 49 ppm
+    ./nrf905_demod 29 |                         # demodulate nRF905 packets with 29 bytes per message
+    ./flarm_decode 43.21 5.43 12                # decode FLARM packets for ground station located at latitude 43.21, longitude 5.43 and geoid height 12
 ```
 
 # References
