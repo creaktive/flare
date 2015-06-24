@@ -71,7 +71,7 @@ void btea(uint32_t *v, int8_t n, const uint32_t key[4]) {
 /* https://metacpan.org/source/GRAY/Geo-Distance-XS-0.13/XS.xs */
 const float DEG_RADS = M_PI / 180.;
 const float KILOMETER_RHO = 6371.64;
-float haversine (float lat1, float lon1, float lat2, float lon2) {
+float haversine(float lat1, float lon1, float lat2, float lon2) {
     lat1 *= DEG_RADS; lon1 *= DEG_RADS;
     lat2 *= DEG_RADS; lon2 *= DEG_RADS;
     float a = sin(0.5 * (lat2 - lat1));
@@ -96,7 +96,10 @@ void make_key(uint32_t key[4], uint32_t timestamp, uint32_t address) {
 }
 
 char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_alt, double timestamp, float rssi, int16_t channel) {
-    if (pkt->magic != 0x20) return NULL;
+    if (!(pkt->magic == 0x10 || pkt->magic == 0x20)) {
+        fprintf(stderr, "bad packet signature: 0x%02x\n", pkt->magic);
+        return NULL;
+    }
 
     uint32_t key[4];
     make_key(key, timestamp, (pkt->addr << 8) & 0xffffff);
