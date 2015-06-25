@@ -115,7 +115,7 @@ char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_
     if (lon >= 0x080000) lon -= 0x100000;
     lon = ((lon + round_lon) << 7) + 0x40;
 
-    int32_t vs = pkt->vs * (2 << (pkt->vsmult - 1));
+    int32_t vs = pkt->vs * (1 << pkt->vsmult);
 
     char tmp[32];
     static char out[512];
