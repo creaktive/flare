@@ -1,6 +1,6 @@
-#ifndef FLARM_DECODE
+#ifndef FLARM_CODEC
 
-#define FLARM_DECODE
+#define FLARM_CODEC
 
 #define FLARM_KEY1 { 0xe43276df, 0xdca83759, 0x9802b8ac, 0x4675a56b }
 #define FLARM_KEY2 0x045d9f3b
@@ -12,7 +12,10 @@ typedef struct {
     unsigned int magic:8;
     /********************/
     int vs:10;
-    unsigned int _unk0:6;
+    unsigned int _unk0:3;
+    unsigned int stealth:1;
+    unsigned int no_track:1;
+    unsigned int _unk1:1;
     unsigned int gps:12;
     unsigned int type:4;
     /********************/
@@ -20,7 +23,7 @@ typedef struct {
     unsigned int alt:13;
     /********************/
     unsigned int lon:20;
-    unsigned int _unk1:10;
+    unsigned int _unk2:10;
     unsigned int vsmult:2;
     /********************/
     int8_t ns[4];
