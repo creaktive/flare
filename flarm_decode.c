@@ -161,6 +161,8 @@ int main(int argc, char **argv) {
     size_t len = 0;
     uint16_t i;
     uint8_t offset;
+    float tmp_ref_lat, tmp_ref_lon;
+    int16_t tmp_ref_alt;
 
     if (argc >= 3 && argc <= 4) {
         ref_lat = atof(argv[1]);
@@ -173,41 +175,50 @@ int main(int argc, char **argv) {
     }
 
     while (getline(&line, &len, stdin) != -1) {
-        i = 0;
-        for (p = line, q = p + strlen(line) - 1; p < q; p++) {
-            if (isxdigit(*p)
-                && isxdigit(*(p + 1))
-                && sscanf(p, "%2hhx", &buf[i]) == 1
-            ) {
-                p++;
-                if (++i == sizeof(buf))
-                    break;
-            } else {
-                i = 0;
+        if (line[0] == '#') {
+            p = line + 1;
+            tmp_ref_lat = tmp_ref_lon = tmp_ref_alt = -1e3;
+            sscanf(p, "%f %f %hd", &tmp_ref_lat, &tmp_ref_lon, &tmp_ref_alt);
+            if (tmp_ref_lat != -1e3) ref_lat = tmp_ref_lat;
+            if (tmp_ref_lon != -1e3) ref_lon = tmp_ref_lon;
+            if (tmp_ref_alt != -1e3) ref_alt = tmp_ref_alt;
+        } else {
+            i = 0;
+            for (p = line, q = p + strlen(line) - 1; p < q; p++) {
+                if (isxdigit(*p)
+                    && isxdigit(*(p + 1))
+                    && sscanf(p, "%2hhx", &buf[i]) == 1
+                ) {
+                    p++;
+                    if (++i == sizeof(buf))
+                        break;
+                } else {
+                    i = 0;
+                }
             }
+
+            if (i == 24 || i == 29) {
+                timestamp = rssi = channel = 0;
+                if (p++ < q)
+                    sscanf(p, "%lf %f %hd", &timestamp, &rssi, &channel);
+
+                offset = buf[0] == 0x31 && buf[1] == 0xfa && buf[2] == 0xb6
+                    ? 3
+                    : 0;
+
+                q = flarm_decode(
+                    (flarm_packet *) (buf + offset),
+                    ref_lat, ref_lon, ref_alt,
+                    timestamp,
+                    rssi,
+                    channel
+                );
+
+                if (q) puts(q);
+                fflush(stdout);
+            } else
+                fprintf(stderr, "only packets with either 24 or 29 bytes are accepted\n");
         }
-
-        if (i == 24 || i == 29) {
-            timestamp = rssi = channel = 0;
-            if (p++ < q)
-                sscanf(p, "%lf %f %hd", &timestamp, &rssi, &channel);
-
-            offset = buf[0] == 0x31 && buf[1] == 0xfa && buf[2] == 0xb6
-                ? 3
-                : 0;
-
-            q = flarm_decode(
-                (flarm_packet *) (buf + offset),
-                ref_lat, ref_lon, ref_alt,
-                timestamp,
-                rssi,
-                channel
-            );
-
-            if (q) puts(q);
-            fflush(stdout);
-        } else
-            fprintf(stderr, "only packets with either 24 or 29 bytes are accepted\n");
     }
 
     return 0;
