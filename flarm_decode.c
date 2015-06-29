@@ -193,6 +193,7 @@ int main(int argc, char **argv) {
                     if (++i == sizeof(buf))
                         break;
                 } else {
+                    if (i == 24) break;
                     i = 0;
                 }
             }
@@ -217,7 +218,7 @@ int main(int argc, char **argv) {
                 if (q) puts(q);
                 fflush(stdout);
             } else
-                fprintf(stderr, "only packets with either 24 or 29 bytes are accepted\n");
+                fprintf(stderr, "only packets with either 24 or 29 bytes are accepted (got %d)\n", i);
         }
     }
 
