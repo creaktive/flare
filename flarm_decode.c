@@ -117,6 +117,9 @@ char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_
 
     int32_t vs = pkt->vs * (1 << pkt->vsmult);
 
+    float dist = haversine(ref_lat, ref_lon, lat / 1e7, lon / 1e7) * KILOMETER_RHO * 1000;
+    int16_t alt = pkt->alt - ref_alt;
+
     char tmp[32];
     static char out[512];
 
@@ -138,8 +141,8 @@ char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_
     }
     json_concat("\"lat\":%.07f,", lat / 1e7);
     json_concat("\"lon\":%.07f,", lon / 1e7);
-    json_concat("\"dist\":%.02f,", haversine(ref_lat, ref_lon, lat / 1e7, lon / 1e7) * KILOMETER_RHO * 1000);
-    json_concat("\"alt\":%d,", pkt->alt - ref_alt);
+    json_concat("\"dist\":%.02f,", sqrt(pow(dist, 2) + pow(alt, 2)));
+    json_concat("\"alt\":%d,", alt);
     json_concat("\"vs\":%d,", vs);
     json_concat("\"type\":%d,", pkt->type);
     json_concat("\"stealth\":%d,", pkt->stealth);
