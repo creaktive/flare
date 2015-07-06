@@ -182,9 +182,18 @@ int main(int argc, char **argv) {
             p = line + 1;
             tmp_ref_lat = tmp_ref_lon = tmp_ref_alt = -1e3;
             sscanf(p, "%f %f %hd", &tmp_ref_lat, &tmp_ref_lon, &tmp_ref_alt);
-            if (tmp_ref_lat != -1e3) ref_lat = tmp_ref_lat;
-            if (tmp_ref_lon != -1e3) ref_lon = tmp_ref_lon;
-            if (tmp_ref_alt != -1e3) ref_alt = tmp_ref_alt;
+            if (tmp_ref_lat != -1e3) {
+                fprintf(stderr, "setting ref_lat = %f\n", tmp_ref_lat);
+                ref_lat = tmp_ref_lat;
+            }
+            if (tmp_ref_lon != -1e3) {
+                fprintf(stderr, "setting ref_lon = %f\n", tmp_ref_lon);
+                ref_lon = tmp_ref_lon;
+            }
+            if (tmp_ref_alt != -1e3) {
+                fprintf(stderr, "setting ref_alt = %d\n", tmp_ref_alt);
+                ref_alt = tmp_ref_alt;
+            }
         } else {
             i = 0;
             for (p = line, q = p + strlen(line) - 1; p < q; p++) {
