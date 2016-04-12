@@ -115,7 +115,15 @@ char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_
     if (lon >= 0x080000) lon -= 0x100000;
     lon = ((lon + round_lon) << 7) + 0x40;
 
-    int32_t vs = pkt->vs * (1 << pkt->vsmult);
+    uint8_t vsmult = 1 << pkt->vsmult;
+    int32_t vs = vsmult * pkt->vs;
+
+    uint16_t i;
+    float ns[sizeof(pkt->ns)], ew[sizeof(pkt->ew)];
+    for (i = 0; i < sizeof(pkt->ns); i++) {
+        ns[i] = vsmult * pkt->ns[i] / 2.;
+        ew[i] = vsmult * pkt->ew[i] / 2.;
+    }
 
     float dist = haversine(ref_lat, ref_lon, lat / 1e7, lon / 1e7) * KILOMETER_RHO * 1000;
     int16_t alt = pkt->alt - ref_alt;
@@ -147,8 +155,8 @@ char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_
     json_concat("\"type\":%d,", pkt->type);
     json_concat("\"stealth\":%d,", pkt->stealth);
     json_concat("\"no_track\":%d,", pkt->no_track);
-    json_concat("\"ns\":[%d,%d,%d,%d],", pkt->ns[0], pkt->ns[1], pkt->ns[2], pkt->ns[3]);
-    json_concat("\"ew\":[%d,%d,%d,%d]}", pkt->ew[0], pkt->ew[1], pkt->ew[2], pkt->ew[3]);
+    json_concat("\"ns\":[%.1f,%.1f,%.1f,%.1f],", ns[0], ns[1], ns[2], ns[3]);
+    json_concat("\"ew\":[%.1f,%.1f,%.1f,%.1f]}", ew[0], ew[1], ew[2], ew[3]);
 
     return out;
 }
