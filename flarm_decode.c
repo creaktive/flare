@@ -148,7 +148,7 @@ char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_
     json_concat("\"stealth\":%d,", pkt->stealth);
     json_concat("\"no_track\":%d,", pkt->no_track);
     json_concat("\"ns\":[%d,%d,%d,%d],", pkt->ns[0], pkt->ns[1], pkt->ns[2], pkt->ns[3]);
-    json_concat("\"ew\":[%d,%d,%d,%d]}", pkt->ew[1], pkt->ew[1], pkt->ew[2], pkt->ew[3]);
+    json_concat("\"ew\":[%d,%d,%d,%d]}", pkt->ew[0], pkt->ew[1], pkt->ew[2], pkt->ew[3]);
 
     return out;
 }
