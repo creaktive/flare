@@ -1,0 +1,8 @@
+dist: trusty
+langauge: c
+compiler:
+  - clang
+  - gcc
+
+script:
+  - make
