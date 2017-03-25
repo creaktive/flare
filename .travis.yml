@@ -1,5 +1,6 @@
 dist: trusty
-langauge: c
+language: c
+
 compiler:
   - clang
   - gcc
