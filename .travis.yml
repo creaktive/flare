@@ -1,6 +1,10 @@
 dist: trusty
 language: c
 
+os:
+  - linux
+  - osx
+
 compiler:
   - clang
   - gcc
