@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/creaktive/flare.png?branch=master)](https://travis-ci.org/creaktive/flare "Build Status")
+
 # nRF905 demodulator/FLARM decoder
 
 ```bash

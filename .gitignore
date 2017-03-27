@@ -21,3 +21,6 @@ nrf905_demod
 
 # Data files
 *.dat
+*.json
+*.jsonp
+*.log
