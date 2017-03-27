@@ -1,5 +1,3 @@
-CC=gcc
-# CC=clang
 RM=rm -f
 CFLAGS=-Wall -Ofast -I/opt/local/include
 # CFLAGS=-Wall -g -I/opt/local/include
