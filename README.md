@@ -9,6 +9,13 @@ rtl_sdr -f 868.05m -s 1.6m -g 49.6 -p 49 - |    # tune to 868.05 MHz, set sample
     ./flarm_decode 43.21 5.43 12                # decode FLARM packets for ground station located at latitude 43.21, longitude 5.43 and geoid height 12
 ```
 
+# PilotAware demodulator
+
+```bash
+
+rtl_sdr -f 869.92m -s 0.921600m -g 15.6 -p 120 - | ./sv6x0_demod 33
+```
+
 # References
  - [Controlling the Wattcher Display](https://pushstack.wordpress.com/2014/07/12/controlling-the-wattcher-display/)
  - [FLARM receiver for GNU Radio](https://github.com/argilo/gr-flarm)
