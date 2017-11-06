@@ -1,7 +1,7 @@
-/* sv6x0_demod, demodulator for NiceRF SV6X0 433/868/915MHz transceiver's family
+/* nrf905_demod, demodulator for nRF905 Single chip 433/868/915MHz Transceiver
  *
  * Copyright (C) 2014 Stanislaw Pusep
- * Altered to work with SV650 (PilotAware Bridge) by Linar Yusupov in 2017.
+ * Altered to work with OGN tracker by Linar Yusupov in 2017.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
-
-#include "lib_crc.h"
 
 /* Some subs are subs for organizational purposes only. They're not intended
  * to be reused. GCC 4.8 seems smart enough to figure it out on it's own,
@@ -64,18 +62,16 @@
  * arithmetics to 10, they prefer 16. That's why the sampling rate is 1.6MHz
  * and we have 16 samples per symbol.
  */
-
-#define symbol_samples      (24)
-#define symbol_rate         (38400)
-#define max_packet_bytes    (37)
-#define preamble_bits       (40)
+#define symbol_samples      (16)
+#define symbol_rate         (100000)
+#define max_packet_bytes    (29)
+#define preamble_bits       (24)
 #define packet_samples      (symbol_samples * 2 * (preamble_bits + max_packet_bytes * 8))
 #define dft_points          (symbol_samples)
 #define sample_rate         (symbol_rate * symbol_samples)
-#define buffer_size         (1 << 14)
+#define buffer_size         (1 << 13)
 #define smooth_buffer_size  (1 << 3)
 #define average_n           (7)
-#define payload_offset      (7)
 
 #if buffer_size < packet_samples
 #error "Adjust buffer_size to fit at least one packet + preamble!"
@@ -118,26 +114,103 @@ static uint16_t cb_idx_iq;
  */
 #define magnitude(v) (creal(v) * creal(v) + cimag(v) * cimag(v))
 
-/* Each nRF905/Si4432 transmission starts with a pattern called "preamble". It is
+/* Each nRF905 transmission starts with a pattern called "preamble". It is
  * something that is clearly distinguishable from the noise. In this case,
  * alternation of "0" and "1" symbols. We just try to match this specific bit
  * pattern against the RF stream. Almost like a regular expression.
  */
-
 const uint8_t preamble_pattern[preamble_bits] = { 
-  1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,
-  1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0
-};
-
-const uint8_t dewhitening_pattern[] = { 0x05, 0xb4, 0x05, 0xae, 0x14, 0xda,
-  0xbf, 0x83, 0xc4, 0x04, 0xb2, 0x04, 0xd6, 0x4d, 0x87, 0xe2, 0x01, 0xa3, 0x26,
-  0xac, 0xbb, 0x63, 0xf1, 0x01, 0xca, 0x07, 0xbd, 0xaf, 0x60, 0xc8, 0x12, 0xed,
-  0x04, 0xbc, 0xf6, 0x12, 0x2c, 0x01, 0xd9, 0x04, 0xb1, 0xd5, 0x03, 0xab, 0x06,
-  0xcf, 0x08, 0xe6, 0xf2, 0x07, 0xd0, 0x12, 0xc2, 0x09, 0x34, 0x20 };   
+  0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1
+  };
 
 /* Runtime configuration globals.
  */
 static uint8_t packet_bytes = 0, use_crc = 1;
+
+// every row represents a parity check to be performed on the received codeword
+static const uint32_t LDPC_ParityCheck_n208k160[48][7]
+= { // parity check vectors: 48 vectors for 48 parity checks
+    // Eaech vector applied to the data packet should yield even number of bits
+ { 0x00000805, 0x00000020, 0x04000000, 0x20000000, 0x00000040, 0x00044020, 0x00000000 },
+ { 0x00000001, 0x00800800, 0x00000000, 0x00000000, 0x00000000, 0x10010000, 0x00008C98 },
+ { 0x00004001, 0x01000080, 0x80000400, 0x00000000, 0x08000200, 0x00200000, 0x00000005 },
+ { 0x00000101, 0x20000200, 0x00000022, 0x00000000, 0x00000000, 0xCC008000, 0x00005002 },
+ { 0x00000401, 0x00000000, 0x00004900, 0x00000020, 0x00000000, 0x20C00349, 0x00000020 },
+ { 0x03140001, 0x00000002, 0x00000000, 0x40000001, 0x41534100, 0x00102C00, 0x00002000 },
+ { 0x04008800, 0x82000642, 0x00000000, 0x00000020, 0x88040020, 0x03000010, 0x00000400 },
+ { 0x00000802, 0x20000000, 0x02000014, 0x01200000, 0x04000403, 0x00800004, 0x0000A004 },
+ { 0x02020820, 0x00000000, 0x80020820, 0x10190040, 0x30000000, 0x00000002, 0x00000900 },
+ { 0x40804950, 0x00090000, 0x00000000, 0x00021204, 0x40001000, 0x10001100, 0x00000000 },
+ { 0x08000A00, 0x00020008, 0x00040000, 0x02400010, 0x01002000, 0x40280280, 0x00000010 },
+ { 0x00000000, 0x00008010, 0x118000A0, 0x00040080, 0x01000084, 0x00040100, 0x00000444 },
+ { 0x20040108, 0x18000000, 0x08608800, 0x0000000A, 0x08000010, 0x00040080, 0x00008000 },
+ { 0x00004080, 0x00422201, 0x00010000, 0x0000A400, 0x00400800, 0x00840000, 0x00000800 },
+ { 0x00000000, 0x60200000, 0x80100240, 0x08000021, 0x02800000, 0x100C0000, 0x00000000 },
+ { 0x00001000, 0x01010002, 0x00082001, 0x04000000, 0x00000001, 0x00040002, 0x00004030 },
+ { 0x00002300, 0x04000000, 0xA0080000, 0x20004000, 0x00028000, 0x00800000, 0x00000400 },
+ { 0x00004000, 0x00104100, 0x40041028, 0x24000020, 0x00200000, 0x00100000, 0x00008000 },
+ { 0x08011000, 0x20040000, 0x00000000, 0xA0800000, 0x08090000, 0x00000100, 0x00000A00 },
+ { 0x10180000, 0x00000204, 0x00002800, 0x20400800, 0x00000000, 0x10000000, 0x00000004 },
+ { 0x00000000, 0xC0000000, 0x10200000, 0x20028000, 0x20000000, 0x80000008, 0x00002011 },
+ { 0x82004000, 0x20000000, 0x04202000, 0x00000000, 0x00000000, 0x00020200, 0x00000400 },
+ { 0x08600000, 0x00001200, 0x94000000, 0x00000000, 0x40000008, 0x00000000, 0x00008020 },
+ { 0x04040000, 0x04010000, 0x04100000, 0x00000100, 0x00200000, 0x40000008, 0x00000804 },
+ { 0x00000200, 0x00000110, 0x04000100, 0x00000000, 0x28400400, 0x10000000, 0x00004000 },
+ { 0x00080000, 0x00000080, 0x04001000, 0x01882007, 0x00008024, 0x04000001, 0x00000010 },
+ { 0x20200000, 0x00000020, 0x00010040, 0x81000800, 0x10001000, 0x00300008, 0x00004400 },
+ { 0x90000010, 0x89841021, 0x00000118, 0x08080000, 0x00020000, 0x40000000, 0x00000040 },
+ { 0x04C20000, 0x10404034, 0x00000000, 0x00004000, 0x00810001, 0x04000200, 0x00000009 },
+ { 0x40102000, 0x020020A0, 0x40100000, 0x00100080, 0x00080400, 0x80030080, 0x00000020 },
+ { 0x00010000, 0x04020920, 0x00000200, 0x00060000, 0x00000218, 0x01002007, 0x00001000 },
+ { 0x00020008, 0x00A08040, 0x00080000, 0x40001400, 0x04200040, 0x80200001, 0x00000200 },
+ { 0x40000402, 0x01100000, 0x20808000, 0x00008000, 0x10100060, 0x00080000, 0x00001008 },
+ { 0x200010A0, 0x00000000, 0x01040100, 0x00000104, 0x02040042, 0x08012000, 0x00000001 },
+ { 0x01000000, 0x50000880, 0x00000092, 0x14400000, 0x00001840, 0x02400000, 0x00000000 },
+ { 0x00000010, 0x02000000, 0x00014000, 0x00200018, 0x00000240, 0x04000800, 0x00000180 },
+ { 0x00008000, 0x00880008, 0x08000044, 0x00100000, 0x00000004, 0x00400820, 0x00001001 },
+ { 0x01000000, 0x00002000, 0x02004001, 0x00000042, 0x00000000, 0x09201020, 0x00000048 },
+ { 0x00800000, 0x01000400, 0x00400002, 0xC0002000, 0x00002080, 0x00010064, 0x00000100 },
+ { 0x00000400, 0x08400840, 0x00000400, 0x00000890, 0x00008102, 0x00000020, 0x00000002 },
+ { 0x00200040, 0x00000081, 0x00000000, 0x02050000, 0x04940000, 0x20008020, 0x00000080 },
+ { 0x00000404, 0x00800000, 0x00001000, 0x00014000, 0x00082200, 0x0A000400, 0x00000000 },
+ { 0x0000A024, 0x00000000, 0x00000402, 0x08A01000, 0x00004010, 0x20000000, 0x00000008 },
+ { 0x00480046, 0x00008000, 0x00000208, 0x00000048, 0x00000000, 0x00410010, 0x00000002 },
+ { 0x0000008C, 0x00044C00, 0x00824004, 0x00000200, 0x00000000, 0x00028000, 0x00000000 },
+ { 0x10010004, 0x00080000, 0x43008000, 0x10000400, 0x80000100, 0x00000040, 0x00000080 },
+ { 0x80000000, 0x0020000C, 0x20420480, 0x00000100, 0x00000008, 0x00005410, 0x00000080 },
+ { 0x00000000, 0x00101000, 0x08000001, 0x02000200, 0x82004A80, 0x00004000, 0x00000202 }
+} ;
+
+const uint8_t ByteCount1s[256] = {
+ 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+ 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+ 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+ 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+ 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+ 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+ 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+ 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+ 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+ 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+ 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+ 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+ 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+ 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+ 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+ 4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
+} ;
+
+inline uint8_t Count1s(uint8_t Byte) { return ByteCount1s[Byte]; }
+
+uint8_t LDPC_Check(const uint8_t *Data) // 20 data bytes followed by 6 parity bytes
+{ uint8_t Errors=0;
+  for(uint8_t Row=0; Row<48; Row++)
+  { uint8_t Count=0;
+    const uint8_t *Check = (uint8_t *)LDPC_ParityCheck_n208k160[Row];
+    for(uint8_t Idx=0; Idx<26; Idx++)
+    { uint8_t And = Data[Idx]&Check[Idx]; Count+=Count1s(And); }
+    if(Count&1) Errors++; }
+  return Errors; }
 
 /* Subroutine: output()
  * Description: print the decoded packet, timestamp, RSSI and channel ID
@@ -153,13 +226,8 @@ void output(const uint8_t *packet, const uint16_t length, const uint8_t channel)
     struct timeval tv;
     double timestamp, rms;
 
-    for (i = 0, p = output; i < length; i++, p += 2) {
-      if (i >= payload_offset && i < (packet[payload_offset-1] + payload_offset)  ) {
-        snprintf(p, 3, "%02x", packet[i] ^ dewhitening_pattern[i-payload_offset]);      
-      } else {
+    for (i = 0, p = output; i < length; i++, p += 2)
         snprintf(p, 3, "%02x", packet[i]);
-      }
-    }
 
     /* Since all the data was already in the buffer, compensate the timestamp
      * subtracting the "time on the wire".
@@ -212,9 +280,8 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     static uint16_t skip_samples[2];
     static uint8_t packet[max_packet_bytes];
     uint16_t i, j, k;
-
-    uint16_t crc16 = 0x0000;
-
+    uint16_t bad_manchester;
+    uint32_t ldp;
 
     /* Simplest possible noise filter (at least, in software): sliding average.
      */
@@ -255,22 +322,37 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
     }
 
     /* When the preamble looks like valid, attempt to decode the rest of the
-     * packet.
+     * packet. All the bits (including the preamble) are Manchester-coded.
+     * This means that the symbol values do not matter, only symbol transitions
+     * do encode the actual bits. For instance, "01" means "1", while "10" means
+     * "0". Both "00" and "11" are invalid, when one of these is detected, the
+     * bit is skipped (and the bit from the previous decoding attempt for this
+     * position is used). If there are too many invalid bits, probably the
+     * thing interpreted as preamble was a fluctuation in randomness, so we
+     * bail out. And yes, preamble is also Manchester-coded, in case you're
+     * wondering. nRF905 preamble is usually stated as having 10 bits. But
+     * Manchester-coded nRF905 preamble has 20 bits.
      */
-
+    bad_manchester = 0;
     for (
         i = packet_samples - preamble_bits * symbol_samples, j = 0;
         i > symbol_samples;
-        i -= symbol_samples, j++
+        i -= symbol_samples * 2, j++
     ) {
         k = j / 8;
-
-        if (!cb_readn(bit[channel], i)) {
-            // set to 1
-            packet[k] |=  (1 << (7 - (j & 7)));
+        if (cb_readn(bit[channel], i) != cb_readn(bit[channel], i + symbol_samples)) {
+            // valid Manchester
+            if (cb_readn(bit[channel], i)) {
+                // set to 1
+                packet[k] |=  (1 << (7 - (j & 7)));
+            } else {
+                // set to 0
+                packet[k] &= ~(1 << (7 - (j & 7)));
+            }
         } else {
-            // set to 0
-            packet[k] &= ~(1 << (7 - (j & 7)));
+            // heuristic, skip if too many bit encoding errors
+            if (++bad_manchester > j / 2)
+                return;
         }
 
         /* At the end of every 8-bit chunk, update CRC checksum. When the
@@ -281,15 +363,15 @@ forceinline void bit_slicer(const uint8_t channel, const int32_t amplitude) {
          * it is possible to use packet size as the "packet received" condition.
          */
         if ((j & 7) == 7) {
-            if (k >= payload_offset) {
-              crc16 = use_crc ? update_crc_ccitt(crc16, packet[k]) : 0;
-            }
             k++;
-            if (crc16 == 0 && k == (packet_bytes ? packet_bytes : k)) {
+            if (k == (packet_bytes ? packet_bytes : k)) {
+              ldp = LDPC_Check((uint8_t  *) &packet[3]);
+              if (!use_crc || !ldp) {
                 output((const uint8_t *) packet, k, channel);
                 skip_samples[channel] = symbol_samples * 2 * (preamble_bits + k * 8);
                 /* memset((void *) packet, 0, sizeof(packet)); */
                 return;
+              }
             }
         }
     }

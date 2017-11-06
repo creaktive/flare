@@ -9,16 +9,20 @@ LDFLAGS=-L/opt/local/lib
 
 NRF905_DEMOD=nrf905_demod$(EXE)
 SV6X0_DEMOD=sv6x0_demod$(EXE)
+OGNTP_DEMOD=ogntp_demod$(EXE)
 FLARM_DECODE=flarm_decode$(EXE)
 
-all: $(NRF905_DEMOD) $(SV6X0_DEMOD) $(FLARM_DECODE)
-	strip $(NRF905_DEMOD) $(SV6X0_DEMOD) $(FLARM_DECODE)
+all: $(NRF905_DEMOD) $(SV6X0_DEMOD) $(OGNTP_DEMOD) $(FLARM_DECODE)
+	strip $(NRF905_DEMOD) $(SV6X0_DEMOD) $(OGNTP_DEMOD) $(FLARM_DECODE)
 
 $(NRF905_DEMOD): nrf905_demod.o lib_crc.o
 	$(CC) ${LDFLAGS} -o $(NRF905_DEMOD) nrf905_demod.o lib_crc.o -lm
 
 $(SV6X0_DEMOD): sv6x0_demod.o lib_crc.o
 	$(CC) ${LDFLAGS} -o $(SV6X0_DEMOD) sv6x0_demod.o lib_crc.o -lm
+
+$(OGNTP_DEMOD): ogntp_demod.o
+	$(CC) ${LDFLAGS} -o $(OGNTP_DEMOD) ogntp_demod.o -lm
 
 $(FLARM_DECODE): flarm_decode.o
 	$(CC) ${LDFLAGS} -o $(FLARM_DECODE) flarm_decode.o -lm
@@ -31,4 +35,4 @@ flarm_decode.o: flarm_codec.h
 	$(CC) ${CFLAGS} ${DEFS} -c $*.c
 
 clean:
-	$(RM) $(NRF905_DEMOD) $(SV6X0_DEMOD) $(FLARM_DECODE) *.o core
+	$(RM) $(NRF905_DEMOD) $(SV6X0_DEMOD) $(OGNTP_DEMOD) $(FLARM_DECODE) *.o core

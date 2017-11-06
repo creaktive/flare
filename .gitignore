@@ -18,6 +18,8 @@
 *.app
 flarm_decode
 nrf905_demod
+sv6x0_demod
+ogntp_demod
 
 # Data files
 *.dat
