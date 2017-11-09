@@ -21,6 +21,7 @@ nrf905_demod
 sv6x0_demod
 ogntp_demod
 ogntp_decode
+p3i_decode
 
 # Data files
 *.dat
