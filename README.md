@@ -33,3 +33,5 @@ rtl_sdr -f 869.92m -s 0.921600m -g 15.6 -p 120 - | ./sv6x0_demod 33 | ./p3i_deco
  - [An Arctangent Type Wideband PM/FM Demodulator with Improved Performances](http://ketabkhanemelli.com/Scientific/IEEE/iel2/565/3783/00140755.pdf)
  - [nRF905 Single chip 433/868/915MHz Transceiver Product Specification](http://www.nordicsemi.com/eng/content/download/2452/29528/file/Product_Specification_nRF905_v1.5.pdf)
  - [The Sliding DFT](http://www.comm.toronto.edu/~dimitris/ece431/slidingdft.pdf)
+ - [SoftRF - multifunctional and multiprotocol DIY aviation proximity awareness system](http://github.com/lyusupov/SoftRF)
+ 
