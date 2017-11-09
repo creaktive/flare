@@ -16,11 +16,11 @@ rtl_sdr -f 868.05m -s 1.6m -g 49.6 -p 49 - |    # tune to 868.05 MHz, set sample
 rtl_sdr -f 868.05m -s 1.6m -g 49.6 -p 49 | ./ogntp_demod 29 | ./ogntp_decode
 ```
 
-# PilotAware demodulator
+# PilotAware demodulator/decoder
 
 ```bash
 
-rtl_sdr -f 869.92m -s 0.921600m -g 15.6 -p 120 - | ./sv6x0_demod 33
+rtl_sdr -f 869.92m -s 0.921600m -g 15.6 -p 120 - | ./sv6x0_demod 33 | ./p3i_decode
 ```
 
 # References
