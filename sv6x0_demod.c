@@ -25,6 +25,7 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include "Protocol_P3I.h"
 #include "lib_crc.h"
 
 /* Some subs are subs for organizational purposes only. They're not intended
@@ -68,14 +69,32 @@
 #define symbol_samples      (24)
 #define symbol_rate         (38400)
 #define max_packet_bytes    (37)
-#define preamble_bits       (40)
+
 #define packet_samples      (symbol_samples * 2 * (preamble_bits + max_packet_bytes * 8))
 #define dft_points          (symbol_samples)
 #define sample_rate         (symbol_rate * symbol_samples)
-#define buffer_size         (1 << 14)
+
 #define smooth_buffer_size  (1 << 3)
 #define average_n           (7)
-#define payload_offset      (7)
+#define payload_offset      (P3I_SYNCWORD_SIZE + P3I_PAYLOAD_OFFSET) // (7)
+
+#if defined(NICERF_PAWB_FWXXX)
+
+//#define preamble_bits       (P3I_PREAMBLE_SIZE * 8) // (80)
+//#define buffer_size         (1 << 15) /* buffer of that size may NOT work ! */
+
+/* Un-comment if you ar Ok to see extra 0xAAAAAAAAAA prior the sync word */
+#define preamble_bits       (40)
+#define buffer_size         (1 << 14)
+
+#elif defined(NICERF_SV610_FW466)
+
+#define preamble_bits       (P3I_PREAMBLE_SIZE * 8) // (40)
+#define buffer_size         (1 << 14)
+
+#else
+#error "Unknown SV6x0 firmware revision"
+#endif
 
 #if buffer_size < packet_samples
 #error "Adjust buffer_size to fit at least one packet + preamble!"
@@ -124,7 +143,31 @@ static uint16_t cb_idx_iq;
  * pattern against the RF stream. Almost like a regular expression.
  */
 
-const uint8_t preamble_pattern[preamble_bits] = { 
+#if defined(NICERF_PAWB_FWXXX)
+
+//const uint8_t preamble_pattern[preamble_bits] = {
+//  0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,
+//  0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,
+//  0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,
+//  0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1
+//};
+
+/* Un-comment if you ar Ok to see extra 0xAAAAAAAAAA prior the sync word */
+const uint8_t preamble_pattern[preamble_bits] = {
+  0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,
+  0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1
+};
+
+/* reset to no whitening for a while */
+const uint8_t dewhitening_pattern[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+#elif defined(NICERF_SV610_FW466)
+
+const uint8_t preamble_pattern[preamble_bits] = {
   1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,
   1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0
 };
@@ -133,7 +176,11 @@ const uint8_t dewhitening_pattern[] = { 0x05, 0xb4, 0x05, 0xae, 0x14, 0xda,
   0xbf, 0x83, 0xc4, 0x04, 0xb2, 0x04, 0xd6, 0x4d, 0x87, 0xe2, 0x01, 0xa3, 0x26,
   0xac, 0xbb, 0x63, 0xf1, 0x01, 0xca, 0x07, 0xbd, 0xaf, 0x60, 0xc8, 0x12, 0xed,
   0x04, 0xbc, 0xf6, 0x12, 0x2c, 0x01, 0xd9, 0x04, 0xb1, 0xd5, 0x03, 0xab, 0x06,
-  0xcf, 0x08, 0xe6, 0xf2, 0x07, 0xd0, 0x12, 0xc2, 0x09, 0x34, 0x20 };   
+  0xcf, 0x08, 0xe6, 0xf2, 0x07, 0xd0, 0x12, 0xc2, 0x09, 0x34, 0x20 };
+
+#else
+#error "Unknown SV6x0 firmware revision"
+#endif
 
 /* Runtime configuration globals.
  */
