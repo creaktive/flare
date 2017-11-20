@@ -39,6 +39,8 @@ lib_crc.o: lib_crc.h
 
 flarm_decode.o: flarm_codec.h
 
+sv6x0_demod.o: Protocol_P3I.h
+
 p3i_decode.o: Protocol_P3I.h
 
 .c.o:
