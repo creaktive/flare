@@ -80,12 +80,12 @@ int main(int argc, char **argv) {
                 if (++i == sizeof(buf))
                     break;
             } else {
-                if (i == 29) break;
+                if (i == 31) break;
                 i = 0;
             }
         }
 
-        if (i == 29 || i == 33) {
+        if (i == 31 || i == 33) {
             timestamp = rssi = channel = 0;
             if (p++ < q)
                 sscanf(p, "%lf %f %hd", &timestamp, &rssi, &channel);
@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
             if (q) puts(q);
             fflush(stdout);
         } else
-            fprintf(stderr, "only packets with either 29 or 33 bytes are accepted (got %d)\n", i);
+            fprintf(stderr, "only packets with either 31 or 33 bytes are accepted (got %d)\n", i);
 
     }
 

@@ -19,8 +19,8 @@
 #ifndef PROTOCOL_P3I_H
 #define PROTOCOL_P3I_H
 
-//#define NICERF_PAWB_FWXXX
-#define NICERF_SV610_FW466
+#define NICERF_PAWB_FWXXX
+//#define NICERF_SV610_FW466
 
 /*
  *  Initially, the PilotAware were using Ciseco ARF module.
@@ -49,11 +49,63 @@
  * 0xaa, 0xfa, 0x03, 0x15, 0x03, 0x06, 0x02, 0x07, 0x02, 0x01, 0x01,
  * 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
  *
- * Channel: 21 (869.92 [PAW .52] MHZ), Band: 868, RF rate: 38400, Tx power: 27.6 dBm
+ * Channel: 21 (869.52 MHZ), Band: 868, RF rate: 38400, Tx power: 27.6 dBm
  * UART: 57600,8N1, Net ID: 0x00000000, Node Id: 0x0000
- * 
+ *
+ */
+
+/*
+ *
+ * http://www.pilotaware.com/wp-content/uploads/2017/03/Protocol.pdf
+ *
+ * 24 byte packet
+ * data rate of 38.4kb/s
+ */
+
+#if defined(NICERF_PAWB_FWXXX)
+
+/*
  *  RF frame:
- *  ---------  
+ *  ---------
+ * +--------------+-------------------+------------------+
+ * | Size (bits)  |   Description     |     Value        |
+ * +--------------+-------------------+------------------+
+ * |      2       |      Warmup       |                  |
+ * +--------------+-------------------+------------------+
+ * |      80      |    Preamble       |  0xAA,...,0xAA   |
+ * +--------------+-------------------+------------------+
+ * |      16      |    Syncword       |    0xb4, 0x2b    |
+ * +--------------+-------------------+------------------+
+ * |      32      |     Net ID        |  0x00,...,0x00   |
+ * +--------------+-------------------+------------------+
+ * |      8       |  Payload length   |     0x18 (24)    |
+ * +--------------+-------------------+------------------+
+ * |      8       |  CRC seed value   |        0x71      |
+ * +--------------+-------------------+------------------+
+ * |      192     | "White" payload   |                  |
+ * +--------------+-------------------+------------------+
+ * |      8       |  CRC-8, POLY_107  |                  |
+ * +--------------+-------------------+------------------+
+ * |      4       |      Cooldown     |                  |
+ * +--------------+-------------------+------------------+
+ */
+
+#define P3I_PREAMBLE_TYPE   RF_PREAMBLE_TYPE_AA
+#define P3I_PREAMBLE_SIZE   10
+#define P3I_SYNCWORD        {0xb4, 0x2b}
+#define P3I_SYNCWORD_SIZE   2
+#define P3I_NET_ID          0x00000000
+#define P3I_PAYLOAD_SIZE    24
+#define P3I_PAYLOAD_OFFSET  6
+#define P3I_CRC_TYPE        RF_CHECKSUM_TYPE_CRC8_107
+#define P3I_CRC_SIZE        1
+
+#elif defined(NICERF_SV610_FW466)
+
+ /* Valid for NiceRF SV610 firmware ver. 4.66 */
+/*
+ *  RF frame:
+ *  ---------
  * +--------------+-------------------+------------------+
  * | Size (bits)  |   Description     |     Value        |
  * +--------------+-------------------+------------------+
@@ -74,28 +126,6 @@
  * |      2       |      Cooldown     |                  |
  * +--------------+-------------------+------------------+
  */
-
-/*
- *
- * http://www.pilotaware.com/wp-content/uploads/2017/03/Protocol.pdf
- *
- * 24 byte packet
- * data rate of 38.4kb/s 
- */
-
-#if defined(NICERF_PAWB_FWXXX)
-/* Experimental settings for PAW bridge firmware ver. ?.?? */
-#define P3I_PREAMBLE_TYPE   RF_PREAMBLE_TYPE_AA
-#define P3I_PREAMBLE_SIZE   10
-#define P3I_SYNCWORD        {0xb4, 0x2b}
-#define P3I_SYNCWORD_SIZE   2
-#define P3I_NET_ID          0x00000000
-#define P3I_PAYLOAD_SIZE    24
-#define P3I_PAYLOAD_OFFSET  5
-#define P3I_CRC_TYPE        RF_CHECKSUM_TYPE_UNKNOWN
-#define P3I_CRC_SIZE        2
-#elif defined(NICERF_SV610_FW466)
-/* Valid for NiceRF SV610 firmware ver. 4.66 */
 #define P3I_PREAMBLE_TYPE   RF_PREAMBLE_TYPE_55
 #define P3I_PREAMBLE_SIZE   5
 #define P3I_SYNCWORD        {0x2d, 0xd4}
@@ -105,6 +135,7 @@
 #define P3I_PAYLOAD_OFFSET  5
 #define P3I_CRC_TYPE        RF_CHECKSUM_TYPE_CCITT_0000
 #define P3I_CRC_SIZE        2
+
 #else
 #error "Unknown SV6x0 firmware revision"
 #endif
