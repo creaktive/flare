@@ -78,7 +78,7 @@
 #define smooth_buffer_size  (1 << 3)
 #define average_n           (7)
 
-#if defined(NICERF_PAWB_FWXXX)
+#if defined(NICERF_PAWB_FW1P1)
 #define payload_offset      (P3I_PAYLOAD_OFFSET)
 #elif defined(NICERF_SV610_FW466)
 #define payload_offset      (P3I_SYNCWORD_SIZE + P3I_PAYLOAD_OFFSET)
@@ -133,7 +133,7 @@ static uint16_t cb_idx_iq;
  * pattern against the RF stream. Almost like a regular expression.
  */
 
-#if defined(NICERF_PAWB_FWXXX)
+#if defined(NICERF_PAWB_FW1P1)
 
 /*
  * Due to limited maximum packet_samples value

@@ -19,7 +19,7 @@
 #ifndef PROTOCOL_P3I_H
 #define PROTOCOL_P3I_H
 
-#define NICERF_PAWB_FWXXX
+#define NICERF_PAWB_FW1P1
 //#define NICERF_SV610_FW466
 
 /*
@@ -62,8 +62,9 @@
  * data rate of 38.4kb/s
  */
 
-#if defined(NICERF_PAWB_FWXXX)
+#if defined(NICERF_PAWB_FW1P1)
 
+/* Valid for NiceRF SV650 firmware revision: "SV650_PA_VER1.1" */
 /*
  *  RF frame:
  *  ---------
@@ -102,7 +103,7 @@
 
 #elif defined(NICERF_SV610_FW466)
 
- /* Valid for NiceRF SV610 firmware ver. 4.66 */
+/* Valid for NiceRF SV610 firmware ver. 4.66 */
 /*
  *  RF frame:
  *  ---------
