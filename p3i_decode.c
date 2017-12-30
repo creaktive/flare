@@ -1,7 +1,7 @@
 /* p3i_decode, decoder for P3I (PilotAware) radio protocol
  *
  * Copyright (C) 2014 Stanislaw Pusep
- * Copyright (C) 2017 Linar Yusupov
+ * Copyright (C) 2017-2018 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
