@@ -89,10 +89,12 @@ long obscure(uint32_t key, uint32_t seed) {
 }
 
 void make_key(uint32_t key[4], uint32_t timestamp, uint32_t address) {
-    static const uint32_t table[4] = FLARM_KEY1;
-    int8_t i;
-    for (i = 0; i < 4; i++)
-        key[i] = obscure(table[i] ^ ((timestamp >> 6) ^ address), FLARM_KEY2) ^ FLARM_KEY3;
+    static const uint32_t table[8] = LEGACY_KEY1;
+    int8_t i, ndx;
+    for (i = 0; i < 4; i++) {
+        ndx = ((timestamp >> 23) & 1) ? i+4 : i ;
+        key[i] = obscure(table[ndx] ^ ((timestamp >> 6) ^ address), LEGACY_KEY2) ^ LEGACY_KEY3;
+    }
 }
 
 char *flarm_decode(const flarm_packet *pkt, float ref_lat, float ref_lon, int16_t ref_alt, double timestamp, float rssi, int16_t channel) {
