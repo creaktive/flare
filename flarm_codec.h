@@ -2,7 +2,8 @@
 
 #define FLARM_CODEC
 
-#define FLARM_KEY1 { 0xe43276df, 0xdca83759, 0x9802b8ac, 0x4675a56b }
+#define FLARM_KEY1 { 0xe43276df, 0xdca83759, 0x9802b8ac, 0x4675a56b, \
+                     0xfc78ea65, 0x804b90ea, 0xb76542cd, 0x329dfa32 }
 #define FLARM_KEY2 0x045d9f3b
 #define FLARM_KEY3 0x87b562f4
 
