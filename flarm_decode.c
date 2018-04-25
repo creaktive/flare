@@ -89,11 +89,11 @@ long obscure(uint32_t key, uint32_t seed) {
 }
 
 void make_key(uint32_t key[4], uint32_t timestamp, uint32_t address) {
-    static const uint32_t table[8] = LEGACY_KEY1;
+    static const uint32_t table[8] = FLARM_KEY1;
     int8_t i, ndx;
     for (i = 0; i < 4; i++) {
         ndx = ((timestamp >> 23) & 1) ? i+4 : i ;
-        key[i] = obscure(table[ndx] ^ ((timestamp >> 6) ^ address), LEGACY_KEY2) ^ LEGACY_KEY3;
+        key[i] = obscure(table[ndx] ^ ((timestamp >> 6) ^ address), FLARM_KEY2) ^ FLARM_KEY3;
     }
 }
 
